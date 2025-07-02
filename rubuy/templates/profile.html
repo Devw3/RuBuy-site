@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Профиль</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles/styles.css') }}">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a0000 0%, #000000 100%);
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-item:hover { background-color: rgba(255,255,255,0.05); cursor: pointer; border-radius: 6px; }
+    .profile-avatar { width: 60px; height: 60px; border-radius: 50%; background-size: cover; background-position: center; }
+  </style>
+</head>
+<body>
+<div class="container-fluid ">
+    <div class="row">
+    <div class="container d-flex justify-content-center align-items-start" style="min-height: 100vh;">
+        <div class="profile-sidebar p-3">
+            <h1 class="text-light mb-3">Профиль</h1>
+
+            <div class="wallet-section mb-4">
+              <div class="profile-header d-flex align-items-center mb-3">
+
+                <div class="profile-info text-light">
+                  <h3>{{ user.name }}</h3>
+                  <small>Регион: {{ user.region }}</small>
+                </div>
+              </div>
+              <div class="profile_counts d-flex mb-2">
+                <div class="wallet-amount display-5 text-light">
+                  <a href="{{ url_for('balance') }}" class="text-light text-decoration-none">
+                      {{ current_balance }}
+                  </a>
+                </div>
+              </div>
+              <div class="wallet-label text-secondary mb-3">Мой кошелек</div>
+
+              <div class="icon-menu mb-4">
+                <div class="icon-item d-flex align-items-center p-2">
+                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+                  </svg>
+                  <span class="icon-text text-light">Заказы</span>
+                </div>
+                <div class="icon-item d-flex align-items-center p-2">
+                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+                  </svg>
+                  <span class="icon-text text-light">Мой Склад</span>
+                </div>
+                <div class="icon-item d-flex align-items-center p-2">
+                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
+                    <path d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                  </svg>
+                  <span class="icon-text text-light">Подписки</span>
+                </div>
+                <div class="icon-item d-flex align-items-center p-2">
+                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/>
+                  </svg>
+                  <span class="icon-text text-light">Посылки</span>
+                </div>
+              </div>
+
+              <div class="wallet-section mb-2">
+                <h3 class="section-title text-secondary">Социальные Сети</h3>
+              </div>
+              <div class="icon-menu">
+                <div class="icon-item d-flex align-items-center p-2">
+                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-2.83.48-5.66-.3-7.78-2.42s-2.9-4.95-2.42-7.78C3.07 7.5 7.5 3.07 12 2.07v2.02c-3.93.49-7 3.85-7 7.91s3.07 7.42 7 7.91v2.02z"/>
+                  </svg>
+                  <span class="icon-text text-light">Поддержка</span>
+                </div>
+              
+                <div class="icon-item d-flex align-items-center p-2">
+                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M21 5h-18c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2v-10c0-1.1-.9-2-2-2zm0 12h-18v-10h18v10z"/>
+                  </svg>
+                  <span class="icon-text text-light">Купоны</span>
+                </div>
+              
+                <div class="icon-item d-flex align-items-center p-2">
+                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32v-.68c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68c-2.87.68-4.5 3.25-4.5 6.32v5l-2 2v1h16v-1l-2-2z"/>
+                  </svg>
+                  <span class="icon-text text-light">Уведомления</span>
+                </div>
+              
+                <div class="icon-item d-flex align-items-center p-2">
+                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 12.9 12 13.5 12 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+                  </svg>
+                  <span class="icon-text text-light">Центр Вопросов</span>
+                </div>
+              </div>
+              <a href="{{ url_for('logout') }}" class="btn btn-danger w-100 mt-4">Выйти</a>
+            </div>
+        </div>
+<!-- 
+        <div class="col-md-8">
+          <div class="card bg-dark text-light mb-3">
+            <div class="card-body">
+              <h5 class="card-title">Добро пожаловать, {{ user.name }}!</h5>
+              <p class="card-text">Здесь вы можете управлять своими заказами, складом и подписками.</p>
+            </div>
+          </div>
+        </div> -->
+        
+      </div>
+          <div class="footer-nav">
+      <div class="footer-item">
+        <a href="{{ url_for('index') }}">
+
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
+            <path d="M3 12l9-9 9 9h-3v9h-12v-9h-3z"/>
+          </svg>
+          <span>Домой</span>
+        </a>
+      </div>
+      <div class="footer-item">
+        <a href="{{ url_for('basket') }}">
+
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
+            <path d="M7 4h-2l-1 2h-2v2h2l1 2h2l1-2h2v-2h-2l-1-2zm13 0h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2z"/>
+          </svg>
+          <span>Корзина</span>
+        </a>
+      </div>
+      <div class="footer-item">
+        <a href="{{ url_for('profile') }}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
+  <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm4-3a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/>
+              <path d="M14 14s-1-1.5-6-1.5S2 14 2 14s1.5-2 6-2 6 2 6 2z"/>          </svg>
+          <span>Профиль</span>
+        </a>
+      </div>      
+    </div>
+
+  </div>
+
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Пополнения - Админ-панель</title>
+    <style>
+        :root {
+            --primary-color: #4a76a8;
+            --dark-color: #2c3e50;
+            --light-color: #ecf0f1;
+            --success-color: #2ecc71;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .admin-container {  
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .admin-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .admin-title {
+            color: var(--dark-color);
+            margin-bottom: 10px;
+        }
+
+        .status-filter {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filter-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .filter-btn.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .replenishments-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .replenishments-table th, .replenishments-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .replenishments-table th {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .status-pending {
+            color: var(--warning-color);
+            font-weight: bold;
+        }
+
+        .status-approved {
+            color: var(--success-color);
+            font-weight: bold;
+        }
+
+        .status-rejected {
+            color: var(--danger-color);
+            font-weight: bold;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+
+        .btn-approve {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .btn-reject {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .btn-view {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1 class="admin-title">Управление пополнениями</h1>
+        </header>
+
+        <div class="status-filter">
+            <button class="filter-btn active" data-status="pending">Заявки на пополнение</button>
+            <!-- <button class="filter-btn" data-status="approved">Одобренные</button>
+            <button class="filter-btn" data-status="rejected">Отклоненные</button> -->
+        </div>
+
+        <div class="loading" id="loading">Загрузка данных...</div>
+        
+    <table class="replenishments-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Пользователь</th>
+                <th>Сумма</th>
+                <th>Дата</th>
+                <th>Статус</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for replenishment in replenishments %}
+            <tr data-id="{{ replenishment.id }}">
+                <td>{{ replenishment.id }}</td>
+                <td>{{ replenishment.user_name }}</td>
+                <td>{{ "%.2f"|format(replenishment.amount) }} ₽</td>
+                <td>{{ replenishment.payment_date }}</td>
+                <td class="status-{{ replenishment.status }}">
+                    {{ 'Ожидает' if replenishment.status == 'pending' else 
+                    'Одобрено' if replenishment.status == 'approved' else 
+                    'Отклонено' }}
+                </td>
+                <td>
+                    {% if replenishment.status == 'pending' %}
+                    <button class="btn-approve" data-id="{{ replenishment.id }}">✓</button>
+                    <button class="btn-reject" data-id="{{ replenishment.id }}">✗</button>
+                    {% endif %}
+                    <a href="{{ url_for('static', filename='uploads/' + replenishment.receipt_path.split('/')[-1]) }}" target="_blank">Чек</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">Нет ожидающих заявок</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+    <script>
+            document.addEventListener('DOMContentLoaded', function() {
+    const tableBody = document.getElementById('replenishments-body');
+    const loading = document.getElementById('loading');
+    const table = document.getElementById('replenishments-table');
+    
+    // Загрузка данных при открытии
+    loadReplenishments('pending');
+    
+    // Обработка фильтров
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            loadReplenishments(this.dataset.status);
+        });
+    });
+    
+    function loadReplenishments(status) {
+        loading.style.display = 'block';
+        table.style.display = 'none';
+        
+        fetch(`/api/admin/replenishments?status=${status}`)
+            .then(response => response.json())
+            .then(data => {
+                tableBody.innerHTML = '';
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.id}</td>
+                        <td>${item.user_name}</td>
+                        <td>${item.amount} ₽</td>
+                        <td>${new Date(item.payment_date).toLocaleDateString()}</td>
+                        <td class="status-${item.status}">${getStatusText(item.status)}</td>
+                        <td>
+                            ${item.status === 'pending' ? `
+                            <button class="btn-approve" data-id="${item.id}">✓</button>
+                            <button class="btn-reject" data-id="${item.id}">✗</button>
+                            ` : ''}
+                            <a href="/receipts/${item.receipt_path.split('/').pop()}" target="_blank">Чек</a>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                
+                loading.style.display = 'none';
+                table.style.display = 'table';
+            });
+    }
+    
+    function getStatusText(status) {
+        const statuses = {
+            'pending': 'Ожидает',
+            'approved': 'Одобрено',
+            'rejected': 'Отклонено'
+        };
+        return statuses[status] || status;
+    }
+});
+    async function handleReplenishmentAction(action, replenishmentId) {
+    // Фиксированные комментарии вместо prompt()
+    const comment = action === 'approve' 
+        ? 'Одобрено администратором'
+        : 'Отклонено администратором';
+    
+    try {
+        const endpoint = `/api/replenishments/${replenishmentId}/${action}`;
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `comment=${encodeURIComponent(comment)}`
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) throw new Error(data.message || 'Ошибка сервера');
+        
+        // Удаляем строку из таблицы
+        const row = document.querySelector(`tr[data-id="${replenishmentId}"]`);
+        if (row) {
+            row.remove();
+        }
+        
+        // Опционально: показываем уведомление об успехе
+        alert(`Заявка ${action === 'approve' ? 'одобрена' : 'отклонена'}`);
+    } catch (error) {
+        alert(`Ошибка: ${error.message}`);
+        console.error('Error:', error);
+    }
+}
+
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('btn-approve')) {
+            handleReplenishmentAction('approve', e.target.dataset.id);
+        }
+        if (e.target.classList.contains('btn-reject')) {
+            handleReplenishmentAction('reject', e.target.dataset.id);
+        }
+    });
+    </script>
+</body>
+</html>

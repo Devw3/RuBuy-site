@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Пополнение баланса</title>
+    <style>
+        :root {
+            --primary-red: #d32f2f;
+            --dark-red: #b71c1c;
+            --black: #121212;
+            --dark-gray: #1e1e1e;
+            --light-gray: #b0b0b0;
+            --white: #ffffff;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: var(--black);
+            color: var(--white);
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .back-button {
+            color: var(--primary-red);
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .balance-header {
+            font-size: 3.5rem;
+            font-weight: bold;
+            color: var(--white);
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .section {
+            background-color: var(--dark-gray);
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 4px solid var(--primary-red);
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: var(--white);
+        }
+        
+        .requisites {
+            background-color: var(--black);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-family: monospace;
+        }
+        
+        .requisite-item {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .requisite-label {
+            color: var(--light-gray);
+            min-width: 150px;
+        }
+        
+        .requisite-value {
+            font-weight: bold;
+            flex-grow: 1;
+            text-align: right;
+            margin-right: 10px;
+        }
+        
+        .copy-btn {
+            background-color: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.3s;
+        }
+        
+        .copy-btn:hover {
+            background-color: var(--dark-red);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--light-gray);
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background-color: var(--black);
+            color: var(--white);
+            font-size: 1rem;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-red);
+        }
+        
+        .file-upload-wrapper {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        .file-upload {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .file-label {
+            display: block;
+            padding: 40px 20px;
+            border: 2px dashed #444;
+            border-radius: 6px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .file-label:hover {
+            border-color: var(--primary-red);
+        }
+        
+        .file-icon {
+            font-size: 2rem;
+            color: var(--primary-red);
+            margin-bottom: 10px;
+        }
+        
+        .file-name {
+            margin-top: 10px;
+            color: var(--light-gray);
+            font-size: 0.9rem;
+            word-break: break-all;
+        }
+        
+        .submit-btn {
+            background-color: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: 30px;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+        
+        .submit-btn:hover {
+            background-color: var(--dark-red);
+            transform: translateY(-2px);
+        }
+        
+        .success-message {
+            color: #4caf50;
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: rgba(76, 175, 80, 0.1);
+            border-radius: 6px;
+            display: none;
+        }
+        
+        .error-message {
+            color: var(--primary-red);
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: rgba(211, 47, 47, 0.1);
+            border-radius: 6px;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .balance-header {
+                font-size: 2.8rem;
+            }
+            
+            .requisite-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .requisite-value {
+                text-align: left;
+                margin: 5px 0;
+            }
+            
+            .copy-btn {
+                width: 100%;
+                margin-top: 5px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 15px;
+            }
+            
+            .balance-header {
+                font-size: 2.3rem;
+            }
+            
+            .section {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="{{url_for('balance')}}" class="back-button">← Назад к балансу</a>
+    
+    <div class="balance-header">{{ current_balance }}</div>
+    
+    <div class="section">
+        <h2 class="section-title">Реквизиты для пополнения</h2>
+        
+        <div class="requisites">
+            <div class="requisite-item">
+                <span class="requisite-label">Банк:</span>
+                <span class="requisite-value">Тинькофф Банк</span>
+                <button class="copy-btn" data-text="Тинькофф Банк">Копировать</button>
+            </div>
+            <div class="requisite-item">
+                <span class="requisite-label">Номер счета:</span>
+                <span class="requisite-value">40817810500001234567</span>
+                <button class="copy-btn" data-text="40817810500001234567">Копировать</button>
+            </div>
+            <div class="requisite-item">
+                <span class="requisite-label">БИК:</span>
+                <span class="requisite-value">044525974</span>
+                <button class="copy-btn" data-text="044525974">Копировать</button>
+            </div>
+            <div class="requisite-item">
+                <span class="requisite-label">ИНН:</span>
+                <span class="requisite-value">7712345678</span>
+                <button class="copy-btn" data-text="7712345678">Копировать</button>
+            </div>
+            <div class="requisite-item">
+                <span class="requisite-label">Назначение платежа:</span>
+                <span class="requisite-value">Пополнение баланса ID{{ user_id }}</span>
+                <button class="copy-btn" data-text="Пополнение баланса ID{{ user_id }}">Копировать</button>
+            </div>
+        </div>
+        
+        <p style="color: var(--light-gray); font-size: 0.9rem; margin-top: 20px;">
+            После оплаты загрузите квитанцию в форму ниже. Средства будут зачислены на ваш баланс после проверки администратором (обычно в течение 15 минут).
+        </p>
+    </div>
+    
+    <div class="section">
+        <h2 class="section-title">Отправить квитанцию</h2>
+        
+        <form id="payment-form">
+            <div class="form-group">
+                <label class="form-label">Сумма пополнения (CNY)</label>
+                <input type="number" class="form-input" name="amount" placeholder="Введите сумму" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Дата платежа</label>
+                <input type="date" class="form-input" name="payment_date" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Квитанция об оплате</label>
+                <div class="file-upload-wrapper">
+                    <input type="file" id="receipt" class="file-upload" name="receipt" accept="image/*,.pdf,.doc,.docx" required>
+                    <label for="receipt" class="file-label">
+                        <div class="file-icon">📁</div>
+                        <div>Нажмите для загрузки файла</div>
+                        <div style="font-size: 0.8rem; color: var(--light-gray); margin-top: 5px;">
+                            (Поддерживаемые форматы: JPG, PNG, PDF, DOC, до 5MB)
+                        </div>
+                    </label>
+                </div>
+                <div id="file-name" class="file-name">Файл не выбран</div>
+            </div>
+            
+            <button type="submit" class="submit-btn">Отправить квитанцию</button>
+            
+            <div id="success-message" class="success-message">
+                Квитанция успешно отправлена! Администратор уведомлен о вашем платеже.
+            </div>
+            
+            <div id="error-message" class="error-message">
+                Ошибка при отправке. Пожалуйста, попробуйте позже.
+            </div>
+        </form>
+    </div>
+
+    <script>
+
+    document.getElementById('receipt').addEventListener('change', function(e) {
+        const fileNameElement = document.getElementById('file-name');
+        if (this.files && this.files.length > 0) {
+            fileNameElement.textContent = this.files[0].name;
+            fileNameElement.style.color = ''; // Сброс цвета ошибки если был
+        } else {
+            fileNameElement.textContent = 'Файл не выбран';
+        }
+    }); 
+
+    document.getElementById('payment-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+    
+    const form = e.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.textContent;
+    const successMessage = document.getElementById('success-message');
+    const errorMessage = document.getElementById('error-message');
+    
+    // Показываем загрузку
+    submitBtn.textContent = 'Отправка...';
+    submitBtn.disabled = true;
+    successMessage.style.display = 'none';
+    errorMessage.style.display = 'none';
+    
+    try {
+        // Собираем данные формы
+        const formData = new FormData(form);
+        
+        // Отправляем данные на сервер
+        const response = await fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest' // Для обработки AJAX на сервере
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка сервера');
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            successMessage.style.display = 'block';
+            form.reset();
+            document.getElementById('file-name').textContent = 'Файл не выбран';
+            
+            // Прокрутка к сообщению
+            successMessage.scrollIntoView({ behavior: 'smooth' });
+            
+            // Обновляем баланс, если он возвращается с сервера
+            if (result.newBalance) {
+                document.querySelector('.current-balance').textContent = result.newBalance;
+            }
+        } else {
+            throw new Error(result.message || 'Неизвестная ошибка');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка:', error);
+        errorMessage.textContent = error.message || 'Произошла ошибка при отправке';
+        errorMessage.style.display = 'block';
+        errorMessage.scrollIntoView({ behavior: 'smooth' });
+    } finally {
+        submitBtn.textContent = originalBtnText;
+        submitBtn.disabled = false;
+    }
+});
+
+    document.querySelector('input[name="payment_date"]').valueAsDate = new Date();
+    </script>
+</body>
+</html>

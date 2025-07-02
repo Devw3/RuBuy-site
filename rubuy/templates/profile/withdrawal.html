@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вывод средств</title>
+    <style>
+        :root {
+            --primary-red: #d32f2f;
+            --dark-red: #b71c1c;
+            --black: #121212;
+            --dark-gray: #1e1e1e;
+            --light-gray: #b0b0b0;
+            --white: #ffffff;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: var(--black);
+            color: var(--white);
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .back-button {
+            color: var(--primary-red);
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .withdrawal-container {
+            background-color: var(--dark-gray);
+            border-radius: 10px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+        
+        .withdrawal-title {
+            font-size: 1.8rem;
+            margin-bottom: 25px;
+            color: var(--white);
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--light-gray);
+            font-weight: 500;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: #2a2a2a;
+            border: 1px solid #333;
+            border-radius: 5px;
+            color: var(--white);
+            font-size: 1rem;
+            transition: border 0.3s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-red);
+        }
+        
+        .card-row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .card-input {
+            flex: 1;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+        
+        .btn-submit:hover {
+            background-color: var(--dark-red);
+        }
+        
+        .current-balance {
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+        }
+        
+        .balance-amount {
+            font-weight: bold;
+            color: var(--white);
+        }
+        
+        .info-text {
+            color: var(--light-gray);
+            font-size: 0.9rem;
+            margin-top: 30px;
+            line-height: 1.5;
+        }
+        
+        .commission-info {
+            color: var(--light-gray);
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .card-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .withdrawal-container {
+                padding: 20px;
+            }
+            
+            .withdrawal-title {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="{{url_for('profile.balance')}}" class="back-button">← Назад к балансу</a>
+
+    <div class="withdrawal-container">
+        <h1 class="withdrawal-title">Вывод средств</h1>
+        
+        <div class="current-balance">
+            Доступно для вывода: <span class="balance-amount">{{ current_balance }} ₽</span>
+        </div>
+        
+        <form id="withdrawalForm" method="POST" action="{{ url_for('profile.process_withdrawal') }}">
+            <div class="form-group">
+                <label class="form-label">Номер карты</label>
+                <input type="text" 
+                       class="form-input" 
+                       name="card_number" 
+                       placeholder="0000 0000 0000 0000" 
+                       required
+                       pattern="[0-9]{16}"
+                       title="Введите 16 цифр номера карты">
+            </div>
+            
+            <div class="card-row">
+                <div class="form-group card-input">
+                    <label class="form-label">Срок действия</label>
+                    <input type="text" 
+                           class="form-input" 
+                           name="card_expiry" 
+                           placeholder="ММ/ГГ" 
+                           required
+                           pattern="(0[1-9]|1[0-2])\/[0-9]{2}"
+                           title="Введите в формате ММ/ГГ">
+                </div>
+                
+                <div class="form-group card-input">
+                    <label class="form-label">CVV/CVC</label>
+                    <input type="text" 
+                           class="form-input" 
+                           name="card_cvv" 
+                           placeholder="000" 
+                           required
+                           pattern="[0-9]{3}"
+                           title="Введите 3 цифры с обратной стороны карты">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Сумма вывода (₽)</label>
+                <input type="number" 
+                       class="form-input" 
+                       name="amount" 
+                       min="100" 
+                       max="{{ current_balance }}" 
+                       step="0.01" 
+                       placeholder="Минимум 100 ₽" 
+                       required>
+                <div class="commission-info">Комиссия: 1% (мин. 50 ₽)</div>
+            </div>
+            
+            <button type="submit" class="btn-submit">Заказать вывод</button>
+        </form>
+        
+        <div class="info-text">
+            <p>Средства поступят на вашу карту в течение 1-3 рабочих дней.</p>
+            <p>Минимальная сумма вывода: 100 ₽</p>
+            <p>Комиссия за вывод: 1% (но не менее 50 ₽)</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('withdrawalForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const amount = parseFloat(this.elements.amount.value);
+            const balance = parseFloat("{{ current_balance }}");
+            
+            if (amount > balance) {
+                alert('Недостаточно средств на балансе');
+                return;
+            }
+            
+            // Расчет комиссии
+            const commission = Math.max(amount * 0.01, 50);
+            const total = amount + commission;
+            
+            if (confirm(`Вывод ${amount} ₽ (с комиссией ${commission} ₽)\nИтого списание: ${total} ₽\nПодтверждаете?`)) {
+                this.submit();
+            }
+        });
+
+        // Форматирование номера карты
+        document.querySelector('input[name="card_number"]').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\s/g, '');
+            if (value.length > 16) value = value.substr(0, 16);
+            value = value.replace(/(\d{4})(?=\d)/g, '$1 ');
+            e.target.value = value;
+        });
+
+        // Форматирование срока действия
+        document.querySelector('input[name="card_expiry"]').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 2) {
+                value = value.substr(0, 2) + '/' + value.substr(2, 2);
+            }
+            e.target.value = value;
+        });
+    </script>
+</body>
+</html>
