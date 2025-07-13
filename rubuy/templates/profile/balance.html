@@ -249,10 +249,10 @@
     <a href="{{url_for('profile')}}" class="back-button">← Профиль</a>
 
     <header>
-        <div class="balance-header">{{ current_balance }}</div>
+        <div class="balance-header">{{ current_balance }} ¥ ( {{ balance_rub }} P)</div>
         <div class="actions">
                 <a href="{{ url_for('replenishment') }}" class="btn btn-topup">Пополнить</a>
-                <button class="btn btn-withdraw">Вывести</button>
+                <a href="{{ url_for('withdraw') }}" class="btn btn-withdraw">Вывести</a>
         </div>
     </header>
     
@@ -268,7 +268,7 @@
     
     <h3>Детали баланса</h3>
     
-    <table class="balance-table">
+    <table class="balance-table">   
         <tbody>
             {% for transaction in transactions %}
             <tr class="transaction-row">
@@ -281,12 +281,14 @@
                     {% endif %}
                 </td>
                 <td class="transaction-cell">
-                    <div class="amount {% if transaction.amount > 0 %}positive{% else %}negative{% endif %}">
-                        {{ "%+.2f"|format(transaction.amount) }} ₽
+                    <div class="amount {% if transaction.change_rub > 0 %}positive{% else %}negative{% endif %}">
+                        {{ transaction.amount_rub }} ₽
                     </div>
+                    {% if transaction.balance_after is not none %}
                     <div class="balance-after">
                         Баланс: {{ "%.2f"|format(transaction.balance_after) }} ₽
                     </div>
+                    {% endif %}
                 </td>
             </tr>
             {% else %}

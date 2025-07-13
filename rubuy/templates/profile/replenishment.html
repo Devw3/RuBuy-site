@@ -207,7 +207,23 @@
             border-radius: 6px;
             display: none;
         }
-        
+
+        .conversion-hint {
+            color: var(--light-gray);
+            font-size: 0.8rem;
+            margin-top: 5px;
+        }
+
+        #cny-estimate {
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .success-message span {
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+                
         @media (max-width: 768px) {
             .balance-header {
                 font-size: 2.8rem;
@@ -247,7 +263,7 @@
 <body>
     <a href="{{url_for('balance')}}" class="back-button">← Назад к балансу</a>
     
-    <div class="balance-header">{{ current_balance }}</div>
+    <div class="balance-header">{{ balance_cny }} ¥ ( {{ balance_rub }} P)</div>
     
     <div class="section">
         <h2 class="section-title">Реквизиты для пополнения</h2>
@@ -282,6 +298,7 @@
         
         <p style="color: var(--light-gray); font-size: 0.9rem; margin-top: 20px;">
             После оплаты загрузите квитанцию в форму ниже. Средства будут зачислены на ваш баланс после проверки администратором (обычно в течение 15 минут).
+            Пополнения на сайте производятся в рублях, а после будут скорректированы в юани.
         </p>
     </div>
     
@@ -290,7 +307,7 @@
         
         <form id="payment-form">
             <div class="form-group">
-                <label class="form-label">Сумма пополнения (CNY)</label>
+                <label class="form-label">Сумма пополнения (RUB)</label>
                 <input type="number" class="form-input" name="amount" placeholder="Введите сумму" required>
             </div>
             
@@ -317,7 +334,9 @@
             <button type="submit" class="submit-btn">Отправить квитанцию</button>
             
             <div id="success-message" class="success-message">
-                Квитанция успешно отправлена! Администратор уведомлен о вашем платеже.
+                Заявка №<span id="request-id"></span> создана!<br>
+                Сумма: <span id="request-amount"></span> RUB<br>
+                Администратор обработает ваш платеж в течение 15 минут.
             </div>
             
             <div id="error-message" class="error-message">
@@ -327,79 +346,83 @@
     </div>
 
     <script>
-
-    document.getElementById('receipt').addEventListener('change', function(e) {
-        const fileNameElement = document.getElementById('file-name');
-        if (this.files && this.files.length > 0) {
-            fileNameElement.textContent = this.files[0].name;
-            fileNameElement.style.color = ''; // Сброс цвета ошибки если был
-        } else {
-            fileNameElement.textContent = 'Файл не выбран';
-        }
-    }); 
-
-    document.getElementById('payment-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-    
-    const form = e.target;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalBtnText = submitBtn.textContent;
-    const successMessage = document.getElementById('success-message');
-    const errorMessage = document.getElementById('error-message');
-    
-    // Показываем загрузку
-    submitBtn.textContent = 'Отправка...';
-    submitBtn.disabled = true;
-    successMessage.style.display = 'none';
-    errorMessage.style.display = 'none';
-    
-    try {
-        // Собираем данные формы
-        const formData = new FormData(form);
-        
-        // Отправляем данные на сервер
-        const response = await fetch(form.action, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest' // Для обработки AJAX на сервере
+        document.getElementById('payment-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.textContent;
+            const successMessage = document.getElementById('success-message');
+            const errorMessage = document.getElementById('error-message');
+            
+            // Скрываем предыдущие сообщения
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+            
+            // Проверяем, выбран ли файл
+            const fileInput = document.getElementById('receipt');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                errorMessage.textContent = 'Пожалуйста, выберите файл с чеком';
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            submitBtn.textContent = 'Отправка...';
+            submitBtn.disabled = true;
+            
+            try {
+                const formData = new FormData(form);
+                
+                // Добавляем проверку размера файла (до 5MB)
+                if (fileInput.files[0].size > 5 * 1024 * 1024) {
+                    throw new Error('Файл слишком большой (максимум 5MB)');
+                }
+                
+                const response = await fetch("{{ url_for('replenishment') }}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest' // Для обработки AJAX на сервере
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Ошибка сервера: ' + response.status);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('request-id').textContent = result.replenishment_id || 'N/A';
+                    document.getElementById('request-amount').textContent = formData.get('amount');
+                    successMessage.style.display = 'block';
+                    form.reset();
+                    document.getElementById('file-name').textContent = 'Файл не выбран';
+                } else {
+                    throw new Error(result.message || 'Неизвестная ошибка');
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                errorMessage.textContent = error.message || 'Произошла ошибка при отправке';
+                errorMessage.style.display = 'block';
+            } finally {
+                submitBtn.textContent = originalBtnText;
+                submitBtn.disabled = false;
             }
         });
-        
-        if (!response.ok) {
-            throw new Error('Ошибка сервера');
-        }
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            successMessage.style.display = 'block';
-            form.reset();
-            document.getElementById('file-name').textContent = 'Файл не выбран';
-            
-            // Прокрутка к сообщению
-            successMessage.scrollIntoView({ behavior: 'smooth' });
-            
-            // Обновляем баланс, если он возвращается с сервера
-            if (result.newBalance) {
-                document.querySelector('.current-balance').textContent = result.newBalance;
-            }
-        } else {
-            throw new Error(result.message || 'Неизвестная ошибка');
-        }
-        
-    } catch (error) {
-        console.error('Ошибка:', error);
-        errorMessage.textContent = error.message || 'Произошла ошибка при отправке';
-        errorMessage.style.display = 'block';
-        errorMessage.scrollIntoView({ behavior: 'smooth' });
-    } finally {
-        submitBtn.textContent = originalBtnText;
-        submitBtn.disabled = false;
-    }
-});
 
-    document.querySelector('input[name="payment_date"]').valueAsDate = new Date();
-    </script>
+        document.getElementById('receipt').addEventListener('change', function(e) {
+            const fileNameElement = document.getElementById('file-name');
+            if (this.files && this.files.length > 0) {
+                fileNameElement.textContent = this.files[0].name;
+                fileNameElement.style.color = 'var(--white)'; // Убедимся, что текст виден
+            } else {
+                fileNameElement.textContent = 'Файл не выбран';
+            }
+        });
+
+        document.querySelector('input[name="payment_date"]').valueAsDate = new Date();
+
+</script>
 </body>
 </html>

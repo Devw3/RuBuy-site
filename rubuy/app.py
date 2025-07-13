@@ -37,27 +37,29 @@ def login_required(f):
 
 @app.route('/')
 def index():
-    user = session.get('user')
-    if not user:
-        return render_template('welcome.html')
-    return render_template('index.html', user=user)
+    if not session.get('user') or 'id' not in session['user']:
+        return redirect(url_for('login'))  # Перенаправляем на страницу входа
+    
+    return render_template('index.html', user=session['user'])
 
 @app.route('/profile')
 @login_required
 def profile():
     user_id = session['user']['id']
-
     
-    # Получаем текущий баланс
-    current_balance = db.get_balance(user_id)
-    current_balance = convert_rub_to_cny(current_balance)
-
-
+    # Получаем данные пользователя
     user = db.get_user(user_id)
     if not user:
         flash('Пользователь не найден', 'error')
         return redirect(url_for('login'))
-    return render_template('profile.html', user=user, current_balance=current_balance)
+    
+    # Получаем балансы (рубли и юани)
+    balances = db.get_balance(user_id)
+    
+    return render_template('profile.html', 
+                         user=user,
+                         balance_rub=balances['rub'],
+                         balance_cny=balances['cny'])
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -172,12 +174,16 @@ def admin_panel():
     
     # Получаем все ожидающие заявки
     pending_replenishments = db.get_pending_replenishments()
+    pending_withdrawals = db.get_pending_withdrawals()
+
     
     return render_template(
         'admin/admin_panel.html',
         user=user,
-        replenishments=pending_replenishments  # Передаем заявки в шаблон
+        replenishments=pending_replenishments,
+        withdrawals=pending_withdrawals
     )
+    
 
 def get_cny_to_rub_rate():
     try:
@@ -195,11 +201,18 @@ def convert_rub_to_cny(rub_amount):
     cny_to_rub_rate = get_cny_to_rub_rate()
     if cny_to_rub_rate is None:
         return None
-    
     rub_to_cny_rate = 1 / cny_to_rub_rate
-    
     cny_amount = rub_amount * rub_to_cny_rate
+    
     return round(cny_amount, 2)
+
+def convert_cny_to_rub(cny_amount):
+    cny_to_rub_rate = get_cny_to_rub_rate()
+    if cny_to_rub_rate is None:
+        return None
+    
+    rub_amount = cny_amount * cny_to_rub_rate
+    return round(rub_amount, 2)
 
 @app.route('/logout')
 @login_required
@@ -238,106 +251,89 @@ def course():
 def balance():
     user_id = session['user']['id']
     
-    # Получаем текущий баланс
-    current_balance = db.get_balance(user_id)
-    current_balance = convert_rub_to_cny(current_balance)
+    # Получаем текущие балансы
+    balances = db.get_balance(user_id)
     
     # Получаем историю транзакций
     transactions = db.get_balance_history(user_id)
     
     return render_template('profile/balance.html',
-                         current_balance=current_balance,
+                         balance_rub=balances['rub'],
+                         balance_cny=balances['cny'],
                          transactions=transactions)
 
 @app.route('/profile/replenishment', methods=['GET', 'POST'])
 @login_required
 def replenishment():
     if request.method == 'POST':
-        # Проверка аутентификации
-        if 'user' not in session:
-            flash('Требуется авторизация', 'error')
-            return redirect(url_for('login'))
-
-        user_id = session['user']['id']
-        
-        # Валидация данных
-        amount = request.form.get('amount')
-        payment_date = request.form.get('payment_date')
-        
-        if not all([amount, payment_date]):
-            flash('Заполните все обязательные поля', 'error')
-            return redirect(url_for('replenishment'))
+        # Проверяем, это AJAX-запрос или обычная форма
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         
         try:
-            amount = float(amount)
-            if amount <= 0:
+            # Валидация данных
+            amount = request.form.get('amount')
+            payment_date = request.form.get('payment_date')
+            receipt = request.files.get('receipt')
+            
+            if not all([amount, payment_date, receipt]):
+                error_msg = 'Заполните все обязательные поля'
+                if is_ajax:
+                    return jsonify({'success': False, 'message': error_msg}), 400
+                flash(error_msg, 'error')
+                return redirect(url_for('replenishment'))
+            
+            amount_rub = float(amount)
+            if amount_rub <= 0:
                 raise ValueError("Сумма должна быть положительной")
-        except ValueError:
-            flash('Некорректная сумма', 'error')
-            return redirect(url_for('replenishment'))
-        
-        # Обработка файла
-        if 'receipt' not in request.files:
-            flash('Не прикреплен файл чека', 'error')
-            return redirect(url_for('replenishment'))
-        
-        receipt = request.files['receipt']
-        if receipt.filename == '':
-            flash('Не выбран файл чека', 'error')
-            return redirect(url_for('replenishment'))
             
-        if not (receipt and allowed_file(receipt.filename)):
-            flash('Недопустимый формат файла. Разрешены: jpg, png, pdf', 'error')
-            return redirect(url_for('replenishment'))
-        
-        # Сохранение файла
-        try:
+            # Сохранение файла
             file_ext = receipt.filename.rsplit('.', 1)[1].lower()
-            filename = secure_filename(f"receipt_{user_id}_{int(time.time())}.{file_ext}")
+            filename = secure_filename(f"receipt_{session['user']['id']}_{int(time.time())}.{file_ext}")
             receipt_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            # Создаем папку, если не существует
-            # os.makedirs(os.path.dirname(receipt_path), exist_ok=True)
             receipt.save(receipt_path)
             
-            # Проверяем, что файл сохранился
-            if not os.path.exists(receipt_path):
-                raise Exception("Файл не сохранился")
-        except Exception as e:
-            app.logger.error(f"Ошибка сохранения файла: {str(e)}")
-            flash('Ошибка при сохранении чека', 'error')
-            return redirect(url_for('replenishment'))
-        
-        # Создание заявки через метод класса DB (без комментария)
-        try:
+            # Создание заявки
             replenishment_id = db.create_replenishment(
-                user_id=user_id,
-                amount=amount,
+                user_id=session['user']['id'],
+                amount_rub=amount_rub,
                 payment_date=payment_date,
                 receipt_path=filename
             )
-            app.logger.info(f"Создана заявка на пополнение. ID: {replenishment_id}, User ID: {user_id}, Amount: {amount}")
+            
+            if is_ajax:
+                return jsonify({
+                    'success': True,
+                    'replenishment_id': replenishment_id,
+                    'message': 'Заявка успешно создана'
+                })
+            
             flash('Заявка на пополнение отправлена на рассмотрение', 'success')
+            return redirect(url_for('replenishment'))
+            
         except Exception as e:
-            app.logger.error(f"Ошибка при создании заявки: {str(e)}")
-            flash('Ошибка при создании заявки', 'error')
-            # Удаляем сохраненный файл, если заявка не создалась
-            if os.path.exists(receipt_path):
-                os.remove(receipt_path)
-        
-        return redirect(url_for('replenishment'))
-    
+            # Логируем полную информацию об ошибке
+            app.logger.error("Ошибка при обработке пополнения:", exc_info=True)
+            
+            # Для AJAX возвращаем больше информации
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'message': str(e),
+                    'type': type(e).__name__,
+                    'traceback': traceback.format_exc()
+                }), 500
+            
+            # Для обычных запросов
+            flash(f'Ошибка: {str(e)}', 'error')
+            return redirect(url_for('replenishment'))  
+          
     # GET запрос
     user_id = session['user']['id']
-    user = db.get_user(user_id=user_id)
-    
-    if not user:
-        flash('Пользователь не найден', 'error')
-        return redirect(url_for('login'))
-    
+    balances = db.get_balance(user_id)
     return render_template('profile/replenishment.html',
-                         current_balance=user.get('balance', 0),
-                         user_id=user_id)
+                         balance_rub=balances['rub'],
+                         balance_cny=balances['cny'])
+
 
 @app.route('/api/replenishments/<int:replenishment_id>/approve', methods=['POST'])
 @admin_required
@@ -386,6 +382,149 @@ def reject_replenishment(replenishment_id):
         print(f"Error: {str(e)}")
         return jsonify({'status': 'error', 'message': 'Внутренняя ошибка сервера'}), 500
     
+@app.route('/profile/withdraw', methods=['GET', 'POST'])
+@login_required
+def withdraw():
+    user_id = session['user']['id']
+    
+    if request.method == 'GET':
+        try:
+            balance_rub = db.get_balance(user_id)['rub']
+            current_balance_cny = convert_rub_to_cny(balance_rub)
+            withdrawals = db.get_user_withdrawals(user_id)
+            
+            return render_template('profile/withdraw.html',
+                                current_balance=current_balance_cny,
+                                balance_rub=balance_rub,
+                                withdrawals=withdrawals)
+        
+        except Exception as e:
+            print(f"Error in GET /withdraw: {str(e)}")
+            flash('Ошибка при получении данных', 'error')
+            return redirect(url_for('profile'))
+
+    elif request.method == 'POST':
+        try:
+            # Получение и очистка данных
+            card_number = request.form.get('card_number', '').replace(' ', '')
+            card_holder = request.form.get('card_holder', '').strip()
+            amount = float(request.form.get('amount', 0))
+            name = request.form.get('name', '').strip()
+            
+            # Валидация данных
+            errors = []
+            if amount < 100:
+                errors.append('Минимальная сумма вывода - 100 ₽')
+            
+            current_balance = db.get_balance(user_id)['rub']
+            if amount > current_balance:
+                errors.append('Недостаточно средств на балансе')
+            
+            if len(card_number) != 16 or not card_number.isdigit():
+                errors.append('Некорректный номер карты (требуется 16 цифр)')
+            
+            if not card_holder or not all(c.isalpha() or c.isspace() for c in card_holder):
+                errors.append('Некорректное имя держателя карты (только буквы и пробелы)')
+            
+            if errors:
+                for error in errors:
+                    flash(error, 'error')
+                return redirect(url_for('withdraw'))
+            
+            # Создание заявки
+            success = db.create_withdrawal(
+                user_id=user_id,
+                amount=amount,
+                card_number=card_number,
+                card_holder=card_holder.upper(),
+                name=name
+            )
+            
+            if not success:
+                flash('Ошибка при создании заявки', 'error')
+                return redirect(url_for('withdraw'))
+            
+            # Обновляем баланс пользователя
+            db.update_balance(user_id, -amount)
+            
+            flash('Заявка на вывод создана и ожидает обработки', 'success')
+            return redirect(url_for('withdraw'))
+            
+        except ValueError:
+            flash('Некорректная сумма', 'error')
+            return redirect(url_for('withdraw'))
+        except Exception as e:
+            print(f"Error in POST /withdraw: {str(e)}")
+            flash('Произошла ошибка при обработке запроса', 'error')
+            return redirect(url_for('withdraw'))
+
+@app.route('/admin/withdrawals/<int:withdrawal_id>/<action>', methods=['POST'])
+@admin_required
+def handle_withdrawal_action(withdrawal_id, action):
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Неверный формат данных'}), 400
+            
+        comment = data.get('comment', '')
+        
+        if action not in ['approve', 'reject']:
+            return jsonify({'error': 'Некорректное действие'}), 400
+        
+        # Получаем информацию о выводе
+        withdrawal = db.get_withdrawal_by_id(withdrawal_id)
+        if not withdrawal:
+            return jsonify({'error': 'Заявка не найдена'}), 404
+        
+        if withdrawal['status'] != 'pending':
+            return jsonify({'error': 'Заявка уже обработана'}), 400
+        
+        new_status = 'approved' if action == 'approve' else 'rejected'
+        user_id = withdrawal['user_id']
+        amount = withdrawal['amount']
+        
+        # Для подтверждения - проверяем баланс и списываем средства
+        if action == 'approve':
+            user_balance = db.get_user_balance(user_id)
+            if user_balance < amount:
+                return jsonify({'error': 'Недостаточно средств на балансе'}), 400
+            
+            # Списание средств
+            db.update_balance(user_id, -amount)
+        
+        # Обновляем статус заявки
+        success = db.update_withdrawal_status(
+            withdrawal_id=withdrawal_id,
+            status=new_status,
+            comment=comment
+        )
+        
+        if not success:
+            # Если не удалось обновить статус - отменяем изменения баланса
+            if action == 'approve':
+                db.update_balance(user_id, amount)
+            return jsonify({'error': 'Ошибка обновления статуса'}), 500
+            
+        return jsonify({
+            'success': True,
+            'message': f'Заявка #{withdrawal_id} успешно {new_status}',
+            'new_status': new_status,
+            'new_balance': db.get_user_balance(user_id)
+        })
+        
+    except Exception as e:
+        print(f"Error in withdrawal processing: {str(e)}")
+        return jsonify({'error': 'Внутренняя ошибка сервера'}), 500
+
+@app.route('/admin/withdrawals/data')
+@admin_required
+def get_withdrawals_data():
+    try:
+        withdrawals = db.get_pending_withdrawals()
+        return jsonify(withdrawals)  # Возвращаем список напрямую
+    except Exception as e:
+        print(f"Error getting withdrawals data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)

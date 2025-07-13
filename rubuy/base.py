@@ -1,8 +1,31 @@
 import sqlite3
+import requests
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import current_app, g
 from contextlib import contextmanager
+
+
+def get_cny_to_rub_rate():
+    try:
+        url = "https://www.cbr-xml-daily.ru/daily_json.js"
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        cny_rate = data["Valute"]["CNY"]["Value"]
+        return cny_rate
+    except Exception as e:
+        return None
+    
+def convert_rub_to_cny(rub_amount):
+    cny_to_rub_rate = get_cny_to_rub_rate()
+    if cny_to_rub_rate is None:
+        return None
+    
+    rub_to_cny_rate = 1 / cny_to_rub_rate
+    
+    cny_amount = rub_amount * rub_to_cny_rate
+    return round(cny_amount, 2)
 
 class Database:
     def __init__(self, app=None):
@@ -77,7 +100,8 @@ class Database:
                     region TEXT NOT NULL,
                     photo TEXT DEFAULT 'static/default.png',
                     is_admin BOOLEAN DEFAULT FALSE,
-                    balance DECIMAL(10, 2) DEFAULT 0.00,
+                    balance_rub DECIMAL(10, 2) DEFAULT 0.0,
+                    balance_cny DECIMAL(10, 2) DEFAULT 0.0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -86,28 +110,46 @@ class Database:
                 CREATE TABLE IF NOT EXISTS replenishments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
-                    amount DECIMAL(10, 2) NOT NULL,
+                    amount_rub DECIMAL(10, 2) NOT NULL,
+                    amount_cny DECIMAL(10, 2) NOT NULL,
                     payment_date TEXT NOT NULL,
                     receipt_path TEXT NOT NULL,
                     status TEXT DEFAULT 'pending',
+                    admin_id INTEGER,
                     admin_comment TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    processed_at TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id),
+                    FOREIGN KEY (admin_id) REFERENCES users (id)
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS withdrawals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    amount DECIMAL(10, 2) NOT NULL,
+                    card_number TEXT NOT NULL,
+                    card_holder TEXT NOT NULL,
+                    name TEXT,
+                    status TEXT DEFAULT 'pending',
+                    admin_comment TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    processed_at TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
-            
     
     # ============== User Methods ==============
     
-    def create_user(self, name, password, region, photo_path='static/default.png', is_admin=False, initial_balance=0.00):
+    def create_user(self, name, password, region, photo_path='static/default.png', is_admin=False):
         hashed_pw = generate_password_hash(password)
         with self.get_cursor() as cursor:
             try:
                 cursor.execute(
                     '''INSERT INTO users 
-                    (name, password, region, photo, is_admin, balance) 
-                    VALUES (?, ?, ?, ?, ?, ?)''',
-                    (name, hashed_pw, region, photo_path, int(is_admin), float(initial_balance))
+                    (name, password, region, photo, is_admin, balance_rub, balance_cny) 
+                    VALUES (?, ?, ?, ?, ?, 0.0, 0.0)''',
+                    (name, hashed_pw, region, photo_path, int(is_admin))
                 )
                 return cursor.lastrowid
             except sqlite3.IntegrityError as e:
@@ -127,6 +169,12 @@ class Database:
                 
             user = cursor.fetchone()
             return dict(user) if user else None
+        
+    def get_user_balance(self, user_id):
+        with self.get_cursor() as cursor:
+            cursor.execute("SELECT balance_rub FROM users WHERE id = ?", (user_id,))
+            result = cursor.fetchone()
+            return result[0] if result else 0
     
     def authenticate_user(self, name, password):
         """Аутентифицирует пользователя"""
@@ -186,10 +234,17 @@ class Database:
             return [dict(row) for row in cursor.fetchall()]
         
     def get_balance(self, user_id):
+        """Возвращает балансы пользователя в рублях и юанях"""
         with self.get_cursor() as cursor:
-            cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+            cursor.execute(
+                'SELECT balance_rub, balance_cny FROM users WHERE id = ?', 
+                (user_id,)
+            )
             result = cursor.fetchone()
-            return float(result['balance']) if result else 0.00
+            return {
+                'rub': float(result['balance_rub']) if result else 0.0,
+                'cny': float(result['balance_cny']) if result else 0.0
+            }
 
     def update_balance(self, user_id, amount):
         with self.get_cursor() as cursor:
@@ -228,79 +283,88 @@ class Database:
                 return None
             
     # заявки на пополнение
+    
 
-    def create_replenishment(self, user_id, amount, payment_date, receipt_path):
-        """Создает заявку на пополнение баланса"""
+    def create_replenishment(self, user_id, amount_rub, payment_date, receipt_path):
         with self.get_cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO replenishments 
-                (user_id, amount, payment_date, receipt_path, status)
-                VALUES (?, ?, ?, ?, 'pending')
-            ''', (user_id, float(amount), payment_date, receipt_path))
-            return cursor.lastrowid
-        
+            try:
+                cursor.execute('''
+                    INSERT INTO replenishments (
+                        user_id, 
+                        amount_rub, 
+                        amount_cny, 
+                        payment_date, 
+                        receipt_path
+                    ) VALUES (?, ?, 0, ?, ?)
+                ''', (user_id, amount_rub, payment_date, receipt_path))
+                return cursor.lastrowid
+            except Exception as e:
+                print(f"Error creating replenishment: {str(e)}")
+                raise        
     def get_pending_replenishments(self):
         """Получает все ожидающие заявки на пополнение"""
         with self.get_cursor() as cursor:
             cursor.execute('''
-                SELECT r.*, u.name as user_name 
+                SELECT 
+                    r.id,
+                    r.user_id,
+                    r.amount_rub,
+                    r.amount_cny,
+                    r.payment_date,
+                    r.receipt_path,
+                    r.status,
+                    r.created_at,
+                    u.name as user_name 
                 FROM replenishments r
                 JOIN users u ON r.user_id = u.id
                 WHERE r.status = 'pending'
                 ORDER BY r.created_at DESC
             ''')
-            return [dict(row) for row in cursor.fetchall()]
-
+            columns = [column[0] for column in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
     def process_replenishment(self, replenishment_id, action, admin_id, comment=None):
-        """Обрабатывает заявку на пополнение баланса с учетом структуры таблицы"""
         if action not in ('approve', 'reject'):
-            raise ValueError("Недопустимое действие. Используйте 'approve' или 'reject'")
+            raise ValueError("Invalid action")
         
         with self.get_cursor() as cursor:
-            try:
-                # Начинаем транзакцию
-                cursor.execute("BEGIN TRANSACTION")
-                
-                # 1. Проверяем существование и статус заявки
+            cursor.execute("BEGIN TRANSACTION")
+            
+            # Получаем данные заявки
+            cursor.execute('''
+                SELECT user_id, amount_rub, amount_cny 
+                FROM replenishments 
+                WHERE id = ? AND status = 'pending'
+            ''', (replenishment_id,))
+            
+            replenishment = cursor.fetchone()
+            if not replenishment:
+                return False
+            
+            user_id, amount_rub, amount_cny = replenishment
+            
+            # Одобрение: пополняем рубли и юани
+            if action == 'approve':
                 cursor.execute('''
-                    SELECT user_id, amount 
-                    FROM replenishments 
-                    WHERE id = ? AND status = 'pending'
-                ''', (replenishment_id,))
-                
-                replenishment = cursor.fetchone()
-                if not replenishment:
-                    return False
-                
-                user_id, amount = replenishment['user_id'], replenishment['amount']
-                
-                # 2. Для одобрения - обновляем баланс пользователя
-                if action == 'approve':
-                    cursor.execute('''
-                        UPDATE users 
-                        SET balance = balance + ? 
-                        WHERE id = ?
-                    ''', (amount, user_id))
-                    
-                    if cursor.rowcount == 0:
-                        raise Exception("Не удалось обновить баланс пользователя")
-                
-                # 3. Обновляем статус заявки (без processed_by, так как его нет в таблице)
-                cursor.execute('''
-                    UPDATE replenishments 
-                    SET status = ?,
-                        admin_comment = ?,
-                        created_at = CURRENT_TIMESTAMP
+                    UPDATE users 
+                    SET balance_rub = balance_rub + ?,
+                        balance_cny = balance_cny + ?
                     WHERE id = ?
-                ''', (f"{action}ed", comment, replenishment_id))
-                
-                cursor.connection.commit()
-                return True
-                
-            except Exception as e:
-                if 'cursor' in locals():
-                    cursor.connection.rollback()
-                raise
+                ''', (amount_rub, amount_cny, user_id))
+            
+            # Обновляем статус заявки
+            new_status = 'approved' if action == 'approve' else 'rejected'
+            cursor.execute('''
+                UPDATE replenishments 
+                SET status = ?,
+                    admin_id = ?,
+                    admin_comment = ?,
+                    processed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (new_status, admin_id, comment, replenishment_id))
+            
+            cursor.connection.commit()
+            return True
     # def debug_show_replenishments_table(self):
     #     """Выводит всю таблицу replenishments для отладки"""
     #     with self.get_cursor() as cursor:
@@ -330,34 +394,187 @@ class Database:
     #         print("-" * 100)
     #         return table_data
 
+
+
     def get_balance_history(self, user_id):
-        """Получает только подтверждённые (approved) пополнения"""
+        """Получает историю операций с отображением изменения баланса"""
         with self.get_cursor() as cursor:
-            # Исправляем опечатку (approveed -> approved) и убираем UNION
+            # Получаем все операции
             cursor.execute('''
                 SELECT 
-                    amount,
+                    amount_rub,
+                    amount_cny,
                     created_at as date,
-                    status
+                    status,
+                    'replenishment' as operation_type
                 FROM replenishments
-                WHERE 
-                    user_id = ? 
-                    AND (status = 'approved' OR status = 'approveed')
+                WHERE user_id = ? 
+                
+                UNION ALL
+                
+                SELECT 
+                    amount as amount_rub,
+                    NULL as amount_cny,
+                    created_at as date,
+                    status,
+                    'withdrawal' as operation_type
+                FROM withdrawals
+                WHERE user_id = ? 
+                    
                 ORDER BY date DESC
-            ''', (user_id,))
+            ''', (user_id, user_id))
             
             operations = cursor.fetchall()
-            current_balance = self.get_balance(user_id)
+            current_balance_rub = self.get_balance(user_id)['rub']
             history = []
             
-            # Правильный расчёт баланса (пополнения увеличивают баланс)
             for op in operations:
+                # Для пополнения: RUB увеличивается
+                if op['operation_type'] == 'replenishment':
+                    change_rub = op['amount_rub']
+                    transaction_type = 'Пополнение'
+                    sign = '+'  # Положительное изменение
+                else:  # withdrawal
+                    change_rub = -op['amount_rub']  # Отрицательное изменение
+                    transaction_type = 'Вывод'
+                    sign = '-'  # Отрицательное изменение
+                
+                # Для утвержденных операций показываем баланс после операции
+                if op['status'] == 'approved':
+                    balance_after = current_balance_rub
+                    # Обновляем текущий баланс для следующей операции
+                    current_balance_rub -= change_rub
+                else:
+                    balance_after = None  # Для ожидающих операций баланс не меняется
+                
                 history.append({
-                    'amount': op['amount'],
+                    'type': transaction_type,
+                    'amount_rub': f"{sign}{op['amount_rub']}",  # С правильным знаком
                     'date': op['date'],
-                    'status': 'approved',  # Нормализуем статус
-                    'balance_after': current_balance
+                    'balance_after': balance_after,
+                    'status': op['status'],
+                    'change_rub': change_rub  # Для сортировки
                 })
-                current_balance -= op['amount']  # Идём от текущего баланса в прошлое
             
             return history
+    
+        # Вывод
+    def create_withdrawal(self, user_id: int, amount: float, card_number: str, 
+                        card_holder: str, name: str) -> bool:
+        with self.get_cursor() as cursor:
+            try:
+                cursor.execute("""
+                    UPDATE users 
+                    SET balance_rub = balance_rub - ? 
+                    WHERE id = ?
+                """, (amount, user_id))
+
+                cursor.execute('''
+                    INSERT INTO withdrawals (
+                        user_id, amount, 
+                        card_number, card_holder, name,
+                        status, created_at
+                    ) VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'))
+                ''', (  # Явно указываем статус 'pending'
+                    user_id, 
+                    amount,
+                    card_number, 
+                    card_holder,
+                    name
+                ))
+                return cursor.lastrowid is not None
+            except Exception as e:
+                print(f"Ошибка при создании вывода: {str(e)}")
+                return False
+            
+    def get_user_withdrawals(self, user_id: int) -> list:
+        with self.get_cursor() as cursor:
+            try:
+                query = '''
+                    SELECT 
+                        id, 
+                        amount,
+                        substr(card_number, -4) as card_last_four,
+                        card_holder,
+                        status,
+                        created_at
+                    FROM withdrawals
+                    WHERE user_id = ?
+                    ORDER BY created_at DESC
+                '''
+                cursor.execute(query, (user_id,))
+                return [dict(row) for row in cursor.fetchall()]
+            except Exception as e:
+                print(f"Ошибка при получении выводов пользователя: {str(e)}")
+                return []
+            
+    def get_withdrawal_by_id(self, withdrawal_id):
+        with self.get_cursor() as cursor:
+            cursor.execute('''
+                SELECT * FROM withdrawals WHERE id = ?
+            ''', (withdrawal_id,))
+            result = cursor.fetchone()
+            return dict(result) if result else None
+
+    def get_pending_withdrawals(self) -> list:
+        with self.get_cursor() as cursor:
+            try:
+                # Получаем только ожидающие выводы
+                cursor.execute('''
+                    SELECT 
+                        w.id,
+                        w.amount,
+                        u.name as user_name,
+                        w.card_number,
+                        COALESCE(w.card_holder, '') as card_holder,
+                        w.created_at,
+                        w.status
+                    FROM withdrawals w
+                    JOIN users u ON w.user_id = u.id
+                    WHERE w.status = 'pending'
+                    ORDER BY w.created_at DESC
+                ''')
+                
+                # Форматируем результаты
+                withdrawals = []
+                for row in cursor.fetchall():
+                    w = dict(row)
+                    w['amount'] = float(w['amount'])
+                    withdrawals.append(w)
+                    
+                return withdrawals
+                
+            except Exception as e:
+                print(f"Ошибка при получении ожидающих выводов: {str(e)}")
+                return []          
+            
+    def update_withdrawal_status(self, withdrawal_id, status, comment):
+        with self.get_cursor() as cursor:
+            try:
+                # 1. Получаем информацию о выводе
+                cursor.execute('''
+                    SELECT user_id, amount FROM withdrawals 
+                    WHERE id = ? AND status = 'pending'
+                ''', (withdrawal_id,))
+                withdrawal = cursor.fetchone()
+                
+                if not withdrawal:
+                    raise ValueError("Заявка не найдена или уже обработана")
+                    
+                user_id, amount = withdrawal
+
+                # 2. Обновляем статус вывода
+                cursor.execute('''
+                    UPDATE withdrawals 
+                    SET 
+                        status = ?,
+                        admin_comment = ?,
+                        processed_at = datetime('now')
+                    WHERE id = ?
+                ''', (status, comment, withdrawal_id))
+                
+                return True
+                
+            except Exception as e:
+                print(f"Error updating withdrawal status: {str(e)}")
+                raise
