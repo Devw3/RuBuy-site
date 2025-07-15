@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Добро пожаловать на RuBuy!</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles/bootstrap.min.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles/styles.css') }}"/>
+</head>
+<body>
+  <div class="welcome-container">
+    <div class="welcome-menu">
+      <h1>RuBuy</h1>
+      <span>
+        Сайт для заказа товаров с китайских маркетплейсов.<br/>
+        <!-- Доставим с завода Китая к вашим дверям! -->
+      </span>
+      <a href="{{ url_for('login') }}" class="btn-red">Войти</a>
+      <a href="{{ url_for('register') }}" class="btn-red">Зарегистрироваться</a>
+    </div>
+  </div>
+
+  <section class="features">
+    <div class="container">
+      <div class="row">
+        <div class="col-6 col-md-3 feature-item">
+          <div class="feature-icon">🏆</div>
+          <div class="feature-title">Единственные в России</div>
+          <div class="feature-desc">Уникальные условия и предложения.</div>
+        </div>
+        <div class="col-6 col-md-3 feature-item">
+          <div class="feature-icon">💹</div>
+          <div class="feature-title">Лучший курс</div>
+          <div class="feature-desc">Выгодный обмен валют и цены.</div>
+        </div>
+        <div class="col-6 col-md-3 feature-item">
+          <div class="feature-icon">⚡</div>
+          <div class="feature-title">Быстрая доставка</div>
+          <div class="feature-desc">Скорость от склада в Китае до вас.</div>
+        </div>
+        <div class="col-6 col-md-3 feature-item">
+          <div class="feature-icon">🤝</div>
+          <div class="feature-title">Поддержка сайтов</div>
+          <div class="feature-desc">Интеграция с множеством маркетплейсов.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

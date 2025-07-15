@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Финансы - Админ-панель</title>
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --primary-dark: #3a0ca3;
+            --secondary-color: #4cc9f0;
+            --dark-color: #2b2d42;
+            --light-color: #f8f9fa;
+            --success-color: #2ecc71;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --gray-color: #adb5bd;
+            --light-gray: #e9ecef;
+            --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            color: var(--dark-color);
+            line-height: 1.6;
+        }
+
+        .admin-container {  
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .admin-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--light-gray);
+        }
+
+        .admin-title {
+            color: var(--dark-color);
+            margin-bottom: 10px;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 1px solid var(--light-gray);
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            background: none;
+            font-weight: 600;
+            color: var(--gray-color);
+            transition: var(--transition);
+        }
+
+        .tab-btn.active {
+            color: var(--primary-color);
+            background-color: white;
+            box-shadow: var(--card-shadow);
+        }
+
+        .tab-btn:hover:not(.active) {
+            color: var(--dark-color);
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .replenishments-table, .withdrawals-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .replenishments-table th, 
+        .replenishments-table td,
+        .withdrawals-table th,
+        .withdrawals-table td {
+            padding: 15px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--light-gray);
+        }
+
+        .replenishments-table th,
+        .withdrawals-table th {
+            background-color: var(--light-gray);
+            color: var(--dark-color);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+
+        .replenishments-table tr:hover,
+        .withdrawals-table tr:hover {
+            background-color: rgba(67, 97, 238, 0.05);
+        }
+
+        .status-pending {
+            color: var(--warning-color);
+            font-weight: 600;
+        }
+
+        .status-approved {
+            color: var(--success-color);
+            font-weight: 600;
+        }
+
+        .status-rejected {
+            color: var(--danger-color);
+            font-weight: 600;
+        }
+
+        .action-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 5px;
+            font-weight: 500;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-approve {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .btn-approve:hover {
+            background-color: #27ae60;
+        }
+
+        .btn-reject {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .btn-reject:hover {
+            background-color: #c0392b;
+        }
+
+        .btn-view {
+            background-color: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-view:hover {
+            background-color: var(--primary-dark);
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-style: italic;
+            color: var(--gray-color);
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 30px;
+            color: var(--gray-color);
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .admin-container {
+                padding: 15px;
+            }
+            
+            .replenishments-table,
+            .withdrawals-table {
+                display: block;
+                overflow-x: auto;
+            }
+            
+            .tabs {
+                overflow-x: auto;
+                padding-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1 class="admin-title">Управление финансовыми операциями</h1>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="replenishments">Пополнения</button>
+            <button class="tab-btn" data-tab="withdrawals">Выводы</button>
+        </div>
+
+        <!-- Вкладка пополнений -->
+        <div id="replenishments-tab" class="tab-content">
+            <div class="card">
+                <div class="loading" id="loading-replenishments">Загрузка данных...</div>
+                
+                <table class="replenishments-table" id="replenishments-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Пользователь</th>
+                            <th>Сумма</th>
+                            <th>Дата</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="replenishments-body">
+                        {% for replenishment in replenishments %}
+                        <tr data-id="{{ replenishment.id }}">
+                            <td>{{ replenishment.id }}</td>
+                            <td>{{ replenishment.user_name }}</td>
+                            <td>{{ "%.2f"|format(replenishment.amount_rub) }} ₽</td>
+                            <td>{{ replenishment.payment_date }}</td>
+                            <td class="status-{{ replenishment.status }}">
+                                {{ 'Ожидает' if replenishment.status == 'pending' else 
+                                'Одобрено' if replenishment.status == 'approved' else 
+                                'Отклонено' }}
+                            </td>
+                            <td>
+                                {% if replenishment.status == 'pending' %}
+                                <button class="action-btn btn-approve" data-id="{{ replenishment.id }}">
+                                    <span>✓</span> Одобрить
+                                </button>
+                                <button class="action-btn btn-reject" data-id="{{ replenishment.id }}">
+                                    <span>✗</span> Отклонить
+                                </button>
+                                {% endif %}
+                                <a href="{{ url_for('static', filename='uploads/' + replenishment.receipt_path.split('/')[-1]) }}" 
+                                   class="btn-view" target="_blank">
+                                    <span>👁️</span> Чек
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="no-data">Нет ожидающих заявок</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Вкладка выводов -->
+        <div id="withdrawals-tab" class="tab-content" style="display: none;">
+            <div class="card">
+                <table class="withdrawals-table" id="withdrawals-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Пользователь</th>
+                            <th>Сумма</th>
+                            <th>Реквизиты</th>
+                            <th>Имя</th>
+                            <th>Дата создания</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="withdrawals-body">
+                        {% for withdrawal in withdrawals %}
+                        <tr data-id="{{ withdrawal.id }}">
+                            <td>{{ withdrawal.id }}</td>
+                            <td>{{ withdrawal.user_name }}</td>
+                            <td>{{ "%.2f"|format(withdrawal.amount) }} ₽</td>
+                            <td>**** {{ withdrawal.card_last_four }}</td>
+                            <td>{{ withdrawal.name }}</td>
+                            <td>{{ withdrawal.created_at.strftime('%Y-%m-%d %H:%M') if withdrawal.created_at else '' }}</td>
+                            <td class="status-{{ withdrawal.status }}">
+                                {{ 'Ожидает' if withdrawal.status == 'pending' else 
+                                'Одобрено' if withdrawal.status == 'approved' else 
+                                'Отклонено' }}
+                            </td>
+                            <td>
+                                {% if withdrawal.status == 'pending' %}
+                                <button class="action-btn btn-approve" data-id="{{ withdrawal.id }}">
+                                    Одобрить
+                                </button>
+                                <button class="action-btn btn-reject" data-id="{{ withdrawal.id }}">
+                                    Отклонить
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="no-data">Нет ожидающих заявок</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Инициализация вкладок
+        function initTabs() {
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => {
+                if (content.id !== 'replenishments-tab') {
+                    content.style.display = 'none';
+                }
+            });
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.style.display = 'none';
+                    });
+                    
+                    const tabId = this.dataset.tab + '-tab';
+                    const tabContent = document.getElementById(tabId);
+                    if (tabContent) {
+                        tabContent.style.display = 'block';
+                    }
+                });
+            });
+        }
+
+        // Обработка действий с пополнениями
+        async function handleReplenishmentAction(action, replenishmentId) {
+            try {
+                const comment = action === 'approve' 
+                    ? 'Одобрено администратором'
+                    : 'Отклонено администратором';
+                
+                const endpoint = `/api/replenishments/${replenishmentId}/${action}`;
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `comment=${encodeURIComponent(comment)}`
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Ошибка сервера');
+                }
+                
+                const row = document.querySelector(`tr[data-id="${replenishmentId}"]`);
+                if (row) row.remove();
+                
+                alert(`Заявка ${action === 'approve' ? 'одобрена' : 'отклонена'}`);
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+
+        // Обработка действий с выводами
+        async function handleWithdrawalAction(action, withdrawalId) {
+            try {
+                const comment = prompt("Введите комментарий:", 
+                    action === 'approve' ? "Одобрено администратором" : "Отклонено администратором");
+                
+                if (comment === null) return;
+                
+                const response = await fetch(`/admin/withdrawals/${withdrawalId}/${action}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        comment: comment,
+                        admin_id: {{ user.id }}  // Убедитесь, что user.id доступен
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Ошибка сервера');
+                }
+                
+                // Обновляем только одну строку вместо всей таблицы
+                const row = document.querySelector(`#withdrawals-body tr[data-id="${withdrawalId}"]`);
+                if (row) {
+                    const statusCell = row.querySelector('td:nth-child(7)');
+                    if (statusCell) {
+                        statusCell.className = `status-${action === 'approve' ? 'approved' : 'rejected'}`;
+                        statusCell.textContent = action === 'approve' ? 'Одобрено' : 'Отклонено';
+                        
+                        // Убираем кнопки действий
+                        const actionsCell = row.querySelector('td:last-child');
+                        if (actionsCell) actionsCell.innerHTML = '';
+                    }
+                }
+                
+                alert(`Заявка успешно ${action === 'approve' ? 'одобрена' : 'отклонена'}`);
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+
+        // Обновление таблицы выводов
+        async function refreshWithdrawals() {
+            try {
+                const response = await fetch('/admin/withdrawals/data');
+                
+                if (!response.ok) {
+                    throw new Error('Ошибка загрузки данных');
+                }
+                
+                const data = await response.json();
+                const tbody = document.getElementById('withdrawals-body');
+                
+                if (!tbody) return;
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="no-data">Нет ожидающих заявок</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.map(w => `
+                    <tr data-id="${w.id}">
+                        <td>${w.id}</td>
+                        <td>${escapeHtml(w.user_name)}</td>
+                        <td>${w.amount.toFixed(2)} ₽</td>
+                        <td>${w.card_number || '—'}</td>
+                        <td>${escapeHtml(w.card_holder || '—')}</td>
+                        <td>${w.created_at ? w.created_at : ''}</td>
+                        <td class="status-${w.status}">
+                            ${w.status === 'pending' ? 'Ожидает' : 
+                            w.status === 'approved' ? 'Одобрено' : 'Отклонено'}
+                        </td>
+                        <td>
+                            ${w.status === 'pending' ? `
+                            <button class="action-btn btn-approve" data-id="${w.id}">Одобрить</button>
+                            <button class="action-btn btn-reject" data-id="${w.id}">Отклонить</button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Ошибка обновления данных:', error);
+                const tbody = document.getElementById('withdrawals-body');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="error">Ошибка загрузки данных</td></tr>';
+                }
+            }
+        }
+
+        // Экранизация HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Обработчики событий
+        function setupEventListeners() {
+            document.addEventListener('click', function(e) {
+                const approveBtn = e.target.closest('.btn-approve');
+                const rejectBtn = e.target.closest('.btn-reject');
+                
+                if (approveBtn || rejectBtn) {
+                    const btn = approveBtn || rejectBtn;
+                    const action = approveBtn ? 'approve' : 'reject';
+                    const tab = btn.closest('.tab-content').id;
+                    
+                    if (tab === 'replenishments-tab') {
+                        handleReplenishmentAction(action, btn.dataset.id);
+                    } else if (tab === 'withdrawals-tab') {
+                        handleWithdrawalAction(action, btn.dataset.id);
+                    }
+                }
+            });
+        }
+
+        // Инициализация
+        initTabs();
+        setupEventListeners();
+        
+        // Автоматическое обновление только для выводов
+        refreshWithdrawals();
+        const refreshInterval = setInterval(refreshWithdrawals, 30000);
+
+        // Очистка при размонтировании (если нужно)
+        window.addEventListener('beforeunload', () => {
+            clearInterval(refreshInterval);
+        });
+    });
+</script>
+</body>
+</html>
