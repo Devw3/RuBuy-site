@@ -7,9 +7,12 @@ from base import Database
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+from parser.taobao import parse_taobao_product
+from parser.weidian import parse_weidian_product
 
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+API_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VybmFtZSI6Im1jcWVlbjk1OTUiLCJDb21pZCI6bnVsbCwiUm9sZWlkIjpudWxsLCJpc3MiOiJ0bWFwaSIsInN1YiI6Im1jcWVlbjk1OTUiLCJhdWQiOlsiIl0sImlhdCI6MTc1MTY0MzIxNn0.EAeSwRbi7N4pvC71EnJCfEroQicKwz4J4ZvjWFTSUXs"
 
 app = Flask(__name__)
 app.config.update({
@@ -54,12 +57,14 @@ def profile():
         return redirect(url_for('login'))
     
     # Получаем балансы (рубли и юани)
-    balances = db.get_balance(user_id)
+    balance_rub = db.get_balance(user_id)['rub']
+    balance_cny = convert_rub_to_cny(balance_rub)
+
     
     return render_template('profile.html', 
                          user=user,
-                         balance_rub=balances['rub'],
-                         balance_cny=balances['cny'])
+                         balance_rub=balance_rub,
+                         balance_cny=balance_cny)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -137,7 +142,7 @@ def login():
         if not check_password_hash(user['password'], password):
             flash('Неверный пароль', 'error')
             return redirect(url_for('login'))
-        
+    
         # Проверяем is_admin (может быть 0/1 или True/False)
         is_admin = bool(user.get('is_admin', False))
         
@@ -224,7 +229,25 @@ def logout():
 @app.route('/basket')
 @login_required
 def basket():
-    return render_template('basket.html')
+    try:
+        # Получаем корзину из сессии
+        cart = session.get('cart', {})
+        
+        # Если корзина в старом строковом формате, преобразуем
+        if isinstance(cart, str):
+            cart = json.loads(cart)
+        
+        # Преобразуем в список значений, если это словарь
+        cart_items = list(cart.values()) if isinstance(cart, dict) else cart
+        
+        # Вычисляем общую сумму
+        total = sum(float(item['price']) * int(item['quantity']) for item in cart_items)
+        
+        return render_template('basket.html', cart=cart_items, total=total)
+    
+    except Exception as e:
+        print(f"Ошибка при загрузке корзины: {str(e)}")
+        return render_template('basket.html', cart=[], total=0)
 
 # Основное меню
 
@@ -252,14 +275,15 @@ def balance():
     user_id = session['user']['id']
     
     # Получаем текущие балансы
-    balances = db.get_balance(user_id)
+    balance_rub = db.get_balance(user_id)['rub']
+    balance_cny = convert_rub_to_cny(balance_rub)
     
     # Получаем историю транзакций
     transactions = db.get_balance_history(user_id)
     
     return render_template('profile/balance.html',
-                         balance_rub=balances['rub'],
-                         balance_cny=balances['cny'],
+                         balance_rub=balance_rub,
+                         balance_cny=balance_cny,
                          transactions=transactions)
 
 @app.route('/profile/replenishment', methods=['GET', 'POST'])
@@ -329,10 +353,12 @@ def replenishment():
           
     # GET запрос
     user_id = session['user']['id']
-    balances = db.get_balance(user_id)
+    balance_rub = db.get_balance(user_id)['rub']
+    balance_cny = convert_rub_to_cny(balance_rub)
+
     return render_template('profile/replenishment.html',
-                         balance_rub=balances['rub'],
-                         balance_cny=balances['cny'])
+                         balance_rub=balance_rub,
+                         balance_cny=balance_cny)
 
 
 @app.route('/api/replenishments/<int:replenishment_id>/approve', methods=['POST'])
@@ -526,5 +552,168 @@ def get_withdrawals_data():
         print(f"Error getting withdrawals data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+# @app.route('/add_product', methods=['POST'])
+# def add_product():
+#     url = request.form['product_url'].strip()
+    
+#     try:
+#         if 'taobao.com' in url or 'tmall.com' in url:
+#             product = parse_taobao_product(url)
+#         elif 'weidian.com' in url:
+#             product = parse_weidian_product(url)
+#         else:
+#             return render_template('error.html', message="Неподдерживаемый сайт")
+        
+#         # Добавляем товар через метод класса (он вернет product_id)
+#         product_id = db.add_product(product)
+        
+#         return redirect(url_for('product_page', product_id=product_id))
+    
+#     except Exception as e:
+#         return render_template('error.html', message=f"Ошибка: {str(e)}")
+
+
+# @app.route('/product/<int:product_id>')
+# def product_page(product_id):
+#     try:
+#         # Получаем данные через метод класса
+#         product, models = db.get_product_with_models(product_id)
+        
+#         # Подготовка данных для шаблона (та же логика)
+#         colors = {}
+#         for model in models:
+#             color = model['color_name']
+#             if color not in colors:
+#                 colors[color] = {
+#                     'image_url': model['image_url'],
+#                     'sizes': []
+#                 }
+#             colors[color]['sizes'].append({
+#                 'size': model['size_name'],
+#                 'price': model['price'],
+#                 'stock': model['stock'],
+#                 'model_id': model['id']
+#             })
+        
+#         return render_template('product.html', 
+#                              product=product,
+#                              colors=colors)
+    
+#     except ValueError as e:
+#         return render_template('error.html', message=str(e))
+#     except Exception as e:
+#         return render_template('error.html', message=f"Ошибка: {str(e)}")
+
+@app.route('/add_product', methods=['POST'])
+def add_product():
+    url = request.form['product_url'].strip()
+    
+    try:
+        if 'taobao.com' in url or 'tmall.com' in url:
+            product = parse_taobao_product(API_TOKEN, url)
+        elif 'weidian.com' in url:
+            product = parse_weidian_product(url)
+        else:
+            return render_template('error.html', message="Неподдерживаемый сайт")
+        
+        # Добавляем товар через метод класса (он вернет product_id)
+        product_id = db.add_product(product)
+        
+        return redirect(url_for('product_page', product_id=product_id))
+    
+    except Exception as e:
+        return render_template('error.html', message=f"Ошибка: {str(e)}")
+
+
+@app.route('/product/<int:product_id>')
+def product_page(product_id):
+    try:
+        # Используем новую версию функции
+        product_data = db.get_product_with_models(product_id)
+        
+        return render_template('product.html', 
+                             product=product_data['product'],
+                             variants=product_data['variants'],
+                             models=product_data['models'])
+    
+    except ValueError as e:
+        return render_template('error.html', message=str(e))
+    except Exception as e:
+        return render_template('error.html', message=f"Ошибка: {str(e)}")
+
+
+@app.route('/add-to-cart', methods=['POST'])
+@login_required
+def add_to_cart():
+    try:
+        data = request.get_json()  # Для AJAX или используйте request.form для обычной формы
+        model_id = data['model_id']
+        quantity = int(data.get('quantity', 1))
+        
+        with db.get_cursor() as cursor:
+            # Получаем конкретную модель (подтовар)
+            cursor.execute('''
+                SELECT 
+                    m.id as model_id,
+                    m.product_id,
+                    m.color_name as color,
+                    m.size_name as size,
+                    m.price,
+                    m.stock,
+                    m.image_url,
+                    p.title as product_title
+                FROM models m
+                JOIN products p ON m.product_id = p.id
+                WHERE m.id = ?
+            ''', (model_id,))
+            model = cursor.fetchone()
+            
+            if not model:
+                return jsonify(success=False, error='Модель не найдена'), 404
+            
+            if model['stock'] < quantity:
+                return jsonify(success=False, error='Недостаточно товара в наличии'), 400
+            
+            # Добавляем в корзину (сессию)
+            cart = session.get('cart', {})
+            cart_key = f"m{model_id}"  # Уникальный ключ для модели
+            
+            if cart_key in cart:
+                # Увеличиваем количество, если модель уже в корзине
+                cart[cart_key]['quantity'] += quantity
+            else:
+                # Добавляем новую модель
+                cart[cart_key] = {
+                    'model_id': model['model_id'],
+                    'product_id': model['product_id'],
+                    'product_title': model['product_title'],
+                    'color': model['color'],
+                    'size': model['size'],
+                    'price': float(model['price']),
+                    'image_url': model['image_url'],
+                    'quantity': quantity
+                }
+            
+            session['cart'] = cart
+            session.modified = True
+            
+            # Обновляем количество в БД
+            cursor.execute('''
+                UPDATE models 
+                SET stock = stock - ? 
+                WHERE id = ? AND stock >= ?
+            ''', (quantity, model_id, quantity))
+            
+            return jsonify(
+                success=True,
+                message='Товар добавлен в корзину',
+                cart_count=len(cart),
+                cart_item=cart[cart_key]
+            )
+    
+    except Exception as e:
+        return jsonify(success=False, error=f'Ошибка: {str(e)}'), 500
+    
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)

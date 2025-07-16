@@ -46,9 +46,13 @@
     </a>
   </div>
 
-    <div class="input-wrapper">
-      <input type="text" placeholder="Вставьте ссылку вашего товара" />
-    </div>
+    <form action="/add_product" method="POST">
+        <div class="input-wrapper">
+            <input type="text" name="product_url" placeholder="Вставьте ссылку товара" required>
+            <button type="submit">Добавить</button>
+        </div>
+    </form>
+
 
     <div class="brand">RUBUY</div>
 

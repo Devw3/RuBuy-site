@@ -138,6 +138,28 @@ class Database:
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
+
+            # Таблица товаров
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS products (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    base_price REAL
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS models (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    product_id INTEGER,
+                    color_name TEXT,
+                    size_name TEXT,
+                    price REAL,
+                    stock INTEGER,
+                    image_url TEXT,
+                    FOREIGN KEY (product_id) REFERENCES products(id)
+                )
+            ''')
     
     # ============== User Methods ==============
     
@@ -578,3 +600,122 @@ class Database:
             except Exception as e:
                 print(f"Error updating withdrawal status: {str(e)}")
                 raise
+
+    # работа с товарами
+    def add_product(self, product_data):
+        with self.get_cursor() as cursor:
+            try:
+                cursor.execute('''
+                    SELECT id FROM products 
+                    WHERE title = ? AND base_price = ?
+                    LIMIT 1
+                ''', (product_data['title'], product_data['base_price']))
+                existing_product = cursor.fetchone()
+                
+                if existing_product:
+                    return existing_product['id']
+
+                # 1. Добавляем основной товар
+                cursor.execute('''
+                    INSERT INTO products (title, base_price)
+                    VALUES (?, ?)
+                ''', (product_data['title'], product_data['base_price']))
+                
+                product_id = cursor.lastrowid
+                base_price = product_data.get('base_price', 0.0)
+
+                
+                # 2. Добавляем все модели/вариации товара
+                for model in product_data['models']:
+                    cursor.execute('''
+                        INSERT INTO models (
+                            product_id, 
+                            color_name, 
+                            size_name, 
+                            price, 
+                            stock, 
+                            image_url
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (
+                        product_id,
+                        model.get('color_name', ''),
+                        model.get('size_name', ''),
+                        model.get('price', base_price),
+                        model.get('stock', 0),
+                        model.get('image_url', '')
+                    ))
+                
+                return product_id
+                
+            except Exception as e:
+                print(f"Ошибка при добавлении товара: {str(e)}")
+                raise
+
+    def get_product_with_models(self, product_id):
+        with self.get_cursor() as cursor:
+            # Получаем основной товар
+            cursor.execute('SELECT * FROM products WHERE id = ?', (product_id,))
+            product = cursor.fetchone()
+            
+            if not product:
+                raise ValueError("Товар не найден")
+            
+            # Получаем все модели товара
+            cursor.execute('''
+                SELECT * FROM models 
+                WHERE product_id = ?
+                ORDER BY color_name, size_name
+            ''', (product_id,))
+            models = cursor.fetchall()
+            
+            # Конвертируем Row объекты в словари
+            product_dict = dict(product)
+            models_list = [dict(model) for model in models]
+            # print(models_list)
+            
+            # Дополнительная обработка данных для удобства использования в шаблоне
+            variants = {
+                'colors': {},
+                'sizes': {},
+                'images': [],  # Изменили set() на list()
+                'min_price': float('inf'),
+                'max_price': 0
+            }
+            
+            for model in models_list:
+                color = model['color_name']
+                size = model['size_name']
+                
+                # Собираем цвета
+                if color not in variants['colors']:
+                    variants['colors'][color] = []
+                variants['colors'][color].append(model)
+                
+                # Собираем размеры
+                variants['sizes'][size] = {
+                    'price': model['price'],
+                    'stock': model['stock']
+                }
+                
+                # Собираем изображения (уникальные)
+                if model['image_url'] and model['image_url'] not in variants['images']:
+                    variants['images'].append(model['image_url'])
+                
+                # Вычисляем ценовой диапазон
+                variants['min_price'] = min(variants['min_price'], model['price'])
+                variants['max_price'] = max(variants['max_price'], model['price'])
+            
+            # Если все цены одинаковые, оставляем только минимальную
+            if variants['min_price'] == variants['max_price']:
+                variants['max_price'] = None
+            
+            # Добавляем базовую цену из продукта, если не заданы модели
+            if not models_list and product_dict['base_price']:
+                variants['min_price'] = product_dict['base_price']
+            
+            return {
+                'product': product_dict,
+                'models': models_list,
+                'variants': variants
+            }

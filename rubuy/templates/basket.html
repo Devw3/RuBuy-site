@@ -3,51 +3,321 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RUBUY</title>
-
+  <title>RUBUY - Корзина</title>
   <link rel="stylesheet" href="../static/styles/bootstrap.min.css"/>
   <link rel="stylesheet" href="../static/styles/styles.css"/>
+  <style>
+    .cart-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .cart-item {
+      display: flex;
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #eee;
+      position: relative;
+    }
+    .cart-item-image {
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-right: 20px;
+    }
+    .cart-item-details {
+      flex-grow: 1;
+    }
+    .cart-item-title {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 5px;
+    }
+    .cart-item-variants {
+      color: #666;
+      margin-bottom: 5px;
+    }
+    .cart-item-price {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    .cart-item-total {
+      color: #e53935;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .quantity-controls {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+    }
+    .quantity-btn {
+      width: 32px;
+      height: 32px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .quantity-input {
+      width: 50px;
+      height: 32px;
+      text-align: center;
+      margin: 0 5px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .remove-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      color: #999;
+      cursor: pointer;
+      font-size: 20px;
+    }
+    .cart-summary {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 30px;
+    }
+    .cart-total {
+      font-size: 22px;
+      font-weight: bold;
+      text-align: right;
+      margin-bottom: 20px;
+    }
+    .checkout-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: #e53935;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .checkout-btn:hover {
+      background: #c62828;
+    }
+    .empty-cart {
+      text-align: center;
+      padding: 50px 0;
+    }
+    .empty-cart img {
+      max-width: 200px;
+      margin-bottom: 20px;
+    }
+    .continue-shopping {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      color: #333;
+      text-decoration: none;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Ваша корзина пуста, скорей за покупками!</h1>
-    <br>
-    <div class="brand">RUBUY</div>
-
-    <div class="footer-nav">
-        <div class="footer-item">
-            <a href="{{ url_for('index') }}">
-    
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
-                <path d="M3 12l9-9 9 9h-3v9h-12v-9h-3z"/>
-              </svg>
-              <span>Домой</span>
-            </a>
+  <div class="cart-container">
+    {% if cart %}
+      <h1 class="mb-4">Ваша корзина</h1>
+      
+      <div class="cart-items">
+        {% for item in cart %}
+          <div class="cart-item">
+            <button class="remove-btn" data-model-id="{{ item.model_id }}">×</button>
+            <img src="{{ item.image_url or '../static/images/no-image.jpg' }}" alt="{{ item.product_title }}" class="cart-item-image">
+            
+            <div class="cart-item-details">
+              <div class="cart-item-title">{{ item.product_title }}</div>
+              <div class="cart-item-variants">
+                <div>Цвет: {{ item.color }}</div>
+                <div>Размер: {{ item.size }}</div>
+              </div>
+              
+              <div class="cart-item-price">{{ item.price | round(2) }} ¥ × {{ item.quantity }}</div>
+              <div class="cart-item-total">{{ (item.price * item.quantity) | round(2) }} ¥</div>
+              
+              <div class="quantity-controls">
+                <button class="quantity-btn minus" data-model-id="{{ item.model_id }}">-</button>
+                <input type="number" class="quantity-input" value="{{ item.quantity }}" min="1" max="100" data-model-id="{{ item.model_id }}">
+                <button class="quantity-btn plus" data-model-id="{{ item.model_id }}">+</button>
+              </div>
+            </div>
           </div>
-      <div class="footer-item">
-        <a href="{{ url_for('basket') }}">
-
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
-            <path d="M7 4h-2l-1 2h-2v2h2l1 2h2l1-2h2v-2h-2l-1-2zm13 0h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2z"/>
-          </svg>
-          <span>Корзина</span>
-        </a>
+        {% endfor %}
       </div>
-      <div class="footer-item">
-        <a href="{{ url_for('profile') }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
-  <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm4-3a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/>
-              <path d="M14 14s-1-1.5-6-1.5S2 14 2 14s1.5-2 6-2 6 2 6 2z"/>          </svg>
-          <span>Профиль</span>
-        </a>
-      </div>      
-    </div>
-
+      
+      <div class="cart-summary">
+        <div class="cart-total">
+          Итого: {{ total | round(2) }} ¥
+        </div>
+        <button class="checkout-btn" id="checkoutBtn">Оформить заказ</button>
+      </div>
+      
+    {% else %}
+      <div class="empty-cart">
+        <img src="../static/images/empty-cart.png" alt="Пустая корзина">
+        <h2>Ваша корзина пуста</h2>
+        <p>Начните покупки, чтобы увидеть товары здесь</p>
+        <a href="{{ url_for('index') }}" class="continue-shopping">Продолжить покупки</a>
+      </div>
+    {% endif %}
   </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/5.1.3/js/bootstrap.min.js"></script>
+  <!-- Футер -->
+  <div class="footer-nav">
+    <div class="footer-item">
+      <a href="{{ url_for('index') }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
+          <path d="M3 12l9-9 9 9h-3v9h-12v-9h-3z"/>
+        </svg>
+        <span>Домой</span>
+      </a>
+    </div>
+    <div class="footer-item">
+      <a href="{{ url_for('basket') }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
+          <path d="M7 4h-2l-1 2h-2v2h2l1 2h2l1-2h2v-2h-2l-1-2zm13 0h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2zm0 4h-11v2h11v-2z"/>
+        </svg>
+        <span>Корзина</span>
+      </a>
+    </div>
+    <div class="footer-item">
+      <a href="{{ url_for('profile') }}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
+          <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm4-3a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/>
+          <path d="M14 14s-1-1.5-6-1.5S2 14 2 14s1.5-2 6-2 6 2 6 2z"/>
+        </svg>
+        <span>Профиль</span>
+      </a>
+    </div>      
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      // Общие функции
+      function showLoader() {
+        $('body').append('<div class="loader-overlay"><div class="loader"></div></div>');
+      }
+      
+      function hideLoader() {
+        $('.loader-overlay').remove();
+      }
+      
+      function showError(message) {
+        alert(message);
+      }
+      
+      // Обработчики количества
+      function handleQuantityChange(modelId, newQuantity) {
+        showLoader();
+        
+        $.ajax({
+          url: '/update-cart-item',
+          method: 'POST',
+          data: {
+            model_id: modelId,
+            quantity: newQuantity
+          },
+          success: function(response) {
+            if (response.success) {
+              location.reload();
+            } else {
+              showError(response.error || 'Ошибка обновления корзины');
+            }
+          },
+          error: function() {
+            showError('Ошибка соединения с сервером');
+          },
+          complete: hideLoader
+        });
+      }
+      
+      $('.quantity-btn.minus').click(function() {
+        const modelId = $(this).data('model-id');
+        const input = $(`.quantity-input[data-model-id="${modelId}"]`);
+        let value = parseInt(input.val());
+        if (value > 1) {
+          handleQuantityChange(modelId, value - 1);
+        }
+      });
+      
+      $('.quantity-btn.plus').click(function() {
+        const modelId = $(this).data('model-id');
+        const input = $(`.quantity-input[data-model-id="${modelId}"]`);
+        let value = parseInt(input.val());
+        handleQuantityChange(modelId, value + 1);
+      });
+      
+      $('.quantity-input').change(function() {
+        const modelId = $(this).data('model-id');
+        let value = parseInt($(this).val());
+        if (isNaN(value) || value < 1) value = 1;
+        if (value > 100) value = 100;
+        $(this).val(value);
+        handleQuantityChange(modelId, value);
+      });
+      
+      // Удаление товара
+      $('.remove-btn').click(function() {
+        if (!confirm('Удалить товар из корзины?')) return;
+        
+        const modelId = $(this).data('model-id');
+        showLoader();
+        
+        $.ajax({
+          url: '/remove-cart-item',
+          method: 'POST',
+          data: { model_id: modelId },
+          success: function(response) {
+            if (response.success) {
+              location.reload();
+            } else {
+              showError(response.error || 'Ошибка удаления товара');
+            }
+          },
+          error: function() {
+            showError('Ошибка соединения с сервером');
+          },
+          complete: hideLoader
+        });
+      });
+      
+      // Оформление заказа
+      $('#checkoutBtn').click(function() {
+        showLoader();
+        
+        $.ajax({
+          url: '/checkout',
+          method: 'POST',
+          success: function(response) {
+            if (response.success) {
+              window.location.href = '/order/' + response.order_id;
+            } else {
+              showError(response.error || 'Ошибка оформления заказа');
+            }
+          },
+          error: function() {
+            showError('Ошибка соединения с сервером');
+          },
+          complete: hideLoader
+        });
+      });
+    });
+  </script>
 </body>
 </html>
