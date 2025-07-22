@@ -94,7 +94,7 @@
         }
         
         .swiper-thumbs {
-            height: 100px;
+            height: 50px;
             box-sizing: border-box;
             background: #222; /* Тёмный фон миниатюр */
         }
@@ -114,12 +114,12 @@
         .product-title {
             font-size: 2rem;
             margin-bottom: 15px;
-            color: #fff; /* Белый заголовок */
+            color: #fff;
         }
         
         .product-price-range {
             font-size: 1.5rem;
-            color: #e53935; /* Красный цвет цены */
+            color: #fff;
             font-weight: bold;
             margin-bottom: 20px;
             padding: 10px 0;
@@ -156,8 +156,9 @@
         
         .add-to-cart-btn {
             display: block;
+            margin: auto;
             width: 100%;
-            padding: 15px;
+            padding: 12px;
             background: #e53935; /* Красный фон кнопки */
             color: white;
             border: none;
@@ -446,14 +447,14 @@
             text-align: center;
             font-size: 12px;
             padding: 5px 0;
-            color: #ddd; /* Светло-серый текст */
+            color: #e53935;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
         .color-card.selected .color-name {
-            color: #e53935; /* Красный текст */
+            color: #e53935;
             font-weight: bold;
         }
 
@@ -464,6 +465,9 @@
         }
         
         @media (max-width: 768px) {
+            .product-title {
+                    font-size: 1rem;
+                }
             .product-main {
                 flex-direction: column;
             }
@@ -473,11 +477,41 @@
             }
             
             .swiper {
-                height: 300px;
+                height: 220px;
             }
         }
 
-        /* Специальные элементы для чёрно-красной темы */
+        #sizeOptions {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 4px;
+            overflow-x: auto;
+            padding: 10px 0;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #sizeOptions::-webkit-scrollbar {
+            display: none;
+        }
+
+        #sizeOptions {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        #sizeOptions .variant-option {
+            flex: 0 0 auto;
+            min-width: max-content;
+            padding: 8px 16px;
+            white-space: nowrap;
+            border-radius: 5px;
+            font-size: 14px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         .red-accent {
             color: #e53935;
         }
@@ -497,6 +531,21 @@
         .red-border {
             border: 1px solid #e53935;
         }
+        .thumbnail-slider {
+            height: 80px;       /* новая высота всего блока */
+            }
+
+        #colorOptions {
+        display: grid;
+        grid-auto-flow: column;             
+        grid-template-rows: repeat(2, auto); 
+        gap: 12px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 10px 0;
+        -webkit-overflow-scrolling: touch;
+        }
+
 </style>
 </head>
 <body>
@@ -545,19 +594,8 @@
                     {% endif %}
                 </div>
                 
-                <div class="product-meta">
-                    <div class="meta-item">
-                        <span class="meta-label">Артикул:</span>
-                        <span class="meta-value">{{ product['sku'] }}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">Доставка:</span>
-                        <span class="meta-value">5-15 дней</span>
-                    </div>
-                </div>
-                
                 <button class="add-to-cart-btn" id="showVariants">
-                    <i class="fas fa-shopping-cart"></i> Выбрать вариант
+                    <i class="fas fa-shopping-cart"></i> Добавить в корзину
                 </button>
             </div>
         </div>
@@ -742,8 +780,6 @@
             // Форматируем отображение размера и цены
             option.innerHTML = `
                 <span class="size-name">${model.size_name}</span>
-                <span class="size-stock">(${model.stock} шт.)</span>
-                <span class="size-price">${model.price.toFixed(2)} ¥</span>
             `;
             
             if (model.stock <= 0) {
@@ -971,11 +1007,11 @@
             });
         });
         
-        // Выбираем первый цвет по умолчанию
-        const firstColorOption = document.querySelector('#colorOptions .variant-option');
-        if (firstColorOption) {
-            firstColorOption.click();
-        }
+        // // Выбираем первый цвет по умолчанию
+        // const firstColorOption = document.querySelector('#colorOptions .variant-option');
+        // if (firstColorOption) {
+        //     firstColorOption.click();
+        // }
     });
 </script>
 </body>

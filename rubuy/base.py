@@ -155,8 +155,10 @@ class Database:
                     color_name TEXT,
                     size_name TEXT,
                     price REAL,
-                    stock INTEGER,
+                    stock INTEGER,  
                     image_url TEXT,
+                    status TEXT DEFAULT 'temporary',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (product_id) REFERENCES products(id)
                 )
             ''')
@@ -307,7 +309,7 @@ class Database:
     # заявки на пополнение
     
 
-    def create_replenishment(self, user_id, amount_rub, payment_date, receipt_path):
+    def create_replenishment(self, user_id, amount_rub,amount_cny, payment_date, receipt_path):
         with self.get_cursor() as cursor:
             try:
                 cursor.execute('''
@@ -317,8 +319,8 @@ class Database:
                         amount_cny, 
                         payment_date, 
                         receipt_path
-                    ) VALUES (?, ?, 0, ?, ?)
-                ''', (user_id, amount_rub, payment_date, receipt_path))
+                    ) VALUES (?, ?, ?, ?, ?)
+                ''', (user_id, amount_rub, amount_cny, payment_date, receipt_path))
                 return cursor.lastrowid
             except Exception as e:
                 print(f"Error creating replenishment: {str(e)}")
@@ -487,7 +489,8 @@ class Database:
             try:
                 cursor.execute("""
                     UPDATE users 
-                    SET balance_rub = balance_rub - ? 
+                    SET balance_rub = balance_rub - ?,
+                    SET balance_cny = balance_cny - ?,
                     WHERE id = ?
                 """, (amount, user_id))
 
@@ -605,15 +608,15 @@ class Database:
     def add_product(self, product_data):
         with self.get_cursor() as cursor:
             try:
-                cursor.execute('''
-                    SELECT id FROM products 
-                    WHERE title = ? AND base_price = ?
-                    LIMIT 1
-                ''', (product_data['title'], product_data['base_price']))
-                existing_product = cursor.fetchone()
+                # cursor.execute('''
+                #     SELECT id FROM products 
+                #     WHERE title = ? AND base_price = ?
+                #     LIMIT 1
+                # ''', (product_data['title'], product_data['base_price']))
+                # existing_product = cursor.fetchone()
                 
-                if existing_product:
-                    return existing_product['id']
+                # if existing_product:
+                #     return existing_product['id']
 
                 # 1. Добавляем основной товар
                 cursor.execute('''
@@ -719,3 +722,11 @@ class Database:
                 'models': models_list,
                 'variants': variants
             }
+        
+    def clean_old_temporary_models(self):
+        with self.get_cursor() as cursor:
+            cursor.execute('''
+                DELETE FROM models
+                WHERE status = 'temporary'
+                AND created_at < DATETIME('now', '-10 minutes')
+            ''')

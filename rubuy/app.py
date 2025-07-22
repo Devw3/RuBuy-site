@@ -2,7 +2,9 @@ import os
 from functools import wraps
 import sqlite3
 import time
+from datetime import timedelta
 import requests
+from threading import Thread
 from base import Database
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.utils import secure_filename
@@ -17,13 +19,13 @@ API_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VybmFtZSI6Im1jcWVlbjk1OT
 app = Flask(__name__)
 app.config.update({
     'DATABASE': 'instance/users.db',
-    'SECRET_KEY': 'your-secure-secret-key',  # Замените на надежный секретный ключ
-    'UPLOAD_FOLDER': UPLOAD_FOLDER
+    'SECRET_KEY': 'c4a2d768d37d4c7c8a4d94f37242b1e2cfb9b77aaf25fa13a86f44bd3c3d69f4',
+    'UPLOAD_FOLDER': UPLOAD_FOLDER, 
+    'PERMANENT_SESSION_LIFETIME': timedelta(days=7)
 })
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs('instance', exist_ok=True)  # Убедимся, что папка instance существует
-
 db = Database(app)
 
 def allowed_file(filename):
@@ -45,6 +47,16 @@ def index():
     
     return render_template('index.html', user=session['user'])
 
+def start_cleanup_loop(db):
+    def run():
+        with app.app_context():
+            while True:
+                db.clean_old_temporary_models()
+                time.sleep(600)  # каждые 10 минут
+
+    thread = Thread(target=run, daemon=True)
+    thread.start()
+
 @app.route('/profile')
 @login_required
 def profile():
@@ -58,7 +70,7 @@ def profile():
     
     # Получаем балансы (рубли и юани)
     balance_rub = db.get_balance(user_id)['rub']
-    balance_cny = convert_rub_to_cny(balance_rub)
+    balance_cny = db.get_balance(user_id)['cny']
 
     
     return render_template('profile.html', 
@@ -276,7 +288,7 @@ def balance():
     
     # Получаем текущие балансы
     balance_rub = db.get_balance(user_id)['rub']
-    balance_cny = convert_rub_to_cny(balance_rub)
+    balance_cny = db.get_balance(user_id)['cny']
     
     # Получаем историю транзакций
     transactions = db.get_balance_history(user_id)
@@ -307,6 +319,7 @@ def replenishment():
                 return redirect(url_for('replenishment'))
             
             amount_rub = float(amount)
+            amount_cny = convert_rub_to_cny(amount_rub)
             if amount_rub <= 0:
                 raise ValueError("Сумма должна быть положительной")
             
@@ -320,6 +333,7 @@ def replenishment():
             replenishment_id = db.create_replenishment(
                 user_id=session['user']['id'],
                 amount_rub=amount_rub,
+                amount_cny=amount_cny,
                 payment_date=payment_date,
                 receipt_path=filename
             )
@@ -354,7 +368,7 @@ def replenishment():
     # GET запрос
     user_id = session['user']['id']
     balance_rub = db.get_balance(user_id)['rub']
-    balance_cny = convert_rub_to_cny(balance_rub)
+    balance_cny = db.get_balance(user_id)['cny']
 
     return render_template('profile/replenishment.html',
                          balance_rub=balance_rub,
@@ -416,11 +430,11 @@ def withdraw():
     if request.method == 'GET':
         try:
             balance_rub = db.get_balance(user_id)['rub']
-            current_balance_cny = convert_rub_to_cny(balance_rub)
+            balance_cny = db.get_balance(user_id)['cny']
             withdrawals = db.get_user_withdrawals(user_id)
             
             return render_template('profile/withdraw.html',
-                                current_balance=current_balance_cny,
+                                current_balance=balance_cny,
                                 balance_rub=balance_rub,
                                 withdrawals=withdrawals)
         
@@ -617,7 +631,6 @@ def add_product():
         else:
             return render_template('error.html', message="Неподдерживаемый сайт")
         
-        # Добавляем товар через метод класса (он вернет product_id)
         product_id = db.add_product(product)
         
         return redirect(url_for('product_page', product_id=product_id))
@@ -629,7 +642,6 @@ def add_product():
 @app.route('/product/<int:product_id>')
 def product_page(product_id):
     try:
-        # Используем новую версию функции
         product_data = db.get_product_with_models(product_id)
         
         return render_template('product.html', 
@@ -646,6 +658,7 @@ def product_page(product_id):
 @app.route('/add-to-cart', methods=['POST'])
 @login_required
 def add_to_cart():
+    session.permanent = True
     try:
         data = request.get_json()  # Для AJAX или используйте request.form для обычной формы
         model_id = data['model_id']
@@ -704,7 +717,14 @@ def add_to_cart():
                 SET stock = stock - ? 
                 WHERE id = ? AND stock >= ?
             ''', (quantity, model_id, quantity))
-            
+
+            # изменения статуса товара на доьбавлен в корзину
+            cursor.execute('''
+                UPDATE models
+                SET status = 'in_cart'
+                WHERE id = ?
+            ''', (model_id,))
+
             return jsonify(
                 success=True,
                 message='Товар добавлен в корзину',
@@ -714,6 +734,38 @@ def add_to_cart():
     
     except Exception as e:
         return jsonify(success=False, error=f'Ошибка: {str(e)}'), 500
+
+@app.route('/remove-cart-item', methods=['POST'])
+def remove_cart_item():
+    model_id = (request.get_json() or {}).get('model_id')
+    if not model_id:
+        return jsonify(success=False, error="Не указан model_id"), 400
+    
+    try:
+        with db.get_cursor() as cursor:
+            row = db.execute(
+                "SELECT product_id FROM models WHERE id = ?",
+                (model_id,)
+            ).fetchone()
+            if row is None:
+                return jsonify(success=False, error="Модель не найдена"), 404
+
+            product_id = row['product_id']
+            # удаляем модель
+            db.execute("DELETE FROM models WHERE id = ?", (model_id,))
+            # удаляем продукт
+            db.execute("DELETE FROM products WHERE id = ?", (product_id,))
+            return jsonify(success=True)
+        
+    except Exception as e:
+        return jsonify(success=False, error=f'Ошибка: {str(e)}'), 400
+
     
 if __name__ == '__main__':
+    with app.app_context():
+        db.init_db()
+        if not db.get_user(name='admin1'):
+            db.create_admin('admin1', '123456')
+
+    start_cleanup_loop(db)
     app.run(host='0.0.0.0', debug=True)

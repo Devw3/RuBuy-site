@@ -32,7 +32,7 @@
 
 
 body {
-  background-color: #000;
+background: #1a1a1a;
   color: white;
 }
 
@@ -80,19 +80,20 @@ a {
 }
 
 .input-wrapper {
-  background-color: #1c1c1e;
-  border-radius: 12px;
-  padding: 10px;
-  margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px; 
+    margin-top: 10px;
 }
 
 .input-wrapper input {
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: white;
-  font-size: 16px;
-  outline: none;
+    flex: 1; 
+    padding: 10px;
+    font-size: 16px;
+    color: #fbeff2;
+    border: 1px solid #ffcdcd;
+    background-color: #2a2323;
+    border-radius: 5px;
 }
 
 .brand {
@@ -591,6 +592,23 @@ a {
   font-size: 0.9rem;
   color: #ccc;
 }
+
+.red-black-button {
+    background-color: #e51414;
+    color: #fff;
+    border: 2px solid red;
+    padding: 7px 16px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.red-black-button:hover {
+    background-color: rgb(64, 11, 11);
+    color: #fff;
+}
+
 @media (min-width: 576px) {
   .features .row > [class*='col-'] {
     margin-bottom: 0;
