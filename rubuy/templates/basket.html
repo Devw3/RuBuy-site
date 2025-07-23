@@ -71,16 +71,6 @@
       box-shadow: 0 4px 15px rgba(0,0,0,.5);
     }
 
-    /* ======= Чекбокс выбора ======= */
-    .cart-item-select {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-    }
-
     .cart-item-image {
       width: 100%;
       height: 180px;
@@ -101,13 +91,11 @@
     .cart-item-variants {
       font-size: 14px;
       color: #ccc;
-      margin-bottom: 12px;
       line-height: 1.4;
     }
 
     .cart-item-price {
       font-size: 16px;
-      margin-bottom: 10px;
     }
     .cart-item-price span {
       color: #ccc;
@@ -118,7 +106,6 @@
       font-size: 18px;
       color: #ccc;
       font-weight: bold;
-      margin-bottom: 12px;
     }
 
     /* ======= Контролы количества ======= */
@@ -127,7 +114,6 @@
       align-items: center;
       justify-content: flex-start;
       gap: 8px;
-      margin-bottom: 12px;
     }
     .quantity-btn {
       width: 30px;
@@ -185,11 +171,11 @@
       margin-bottom: 20px;
     }
 
-    .cart-item-select {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      filter: invert(15%) sepia(100%) saturate(6000%) hue-rotate(-5deg) brightness(95%) contrast(115%);
+    .service-checkbox {
+        margin-right: 15px;
+        width: 17px;
+        height: 17px;
+        accent-color: #e53935;
     }
 
     .checkout-btn {
@@ -234,6 +220,13 @@
     }
 
   @media (max-width: 768px) {
+    .cart-item-image {
+      width: 20%;
+      height: 20%;
+      object-fit: cover;
+      border-radius: 6px;
+      margin-bottom: 15px;
+    }
   .product-images {
     flex-direction: row;
     flex-wrap: nowrap;
@@ -247,6 +240,17 @@
     align-items: center;
     max-width: 80px;
     height: auto;
+  }
+  
+  .cart-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px;
+    background: #111;
+    border: 1px solid #300;
+    border-radius: 8px;
+    position: relative;
   }
 
   .cart-item-title {
@@ -277,6 +281,7 @@
     font-size: 14px;
     padding: 8px 12px;
   }
+  
 }
 
   </style>
@@ -286,7 +291,7 @@
     {% if cart %}
       <h1>Ваша корзина</h1>
       <div class="select-all-container" style="margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-        <input type="checkbox" id="selectAll" />
+        <input type="checkbox" id="selectAll" class="service-checkbox"/>
         <label for="selectAll" style="cursor: pointer; user-select: none;">Выбрать все товары</label>
       </div>  
       <div class="cart-items">
@@ -294,7 +299,7 @@
           <div class="cart-item" data-item-total="{{ (item.price * item.quantity) | round(2) }}">
             <!-- чекбокс выбора -->
             <input type="checkbox"
-                   class="cart-item-select"
+                   class="service-checkbox"
                    data-model-id="{{ item.model_id }}"
                    checked>
             <!-- кнопка удаления -->
@@ -334,7 +339,7 @@
       <div class="cart-total">
         Итого: <span id="cartTotalValue">{{ total | round(2) }}</span> ¥
       </div>
-      <button id="checkoutBtn" class="checkout-btn">Оформить заказ</button>
+      <button class="checkout-btn" id="checkoutBtn">Оформить заказ</button>
     </div>
 
     {% else %}
@@ -377,89 +382,88 @@
   </div>
 
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script>
-    $(document).ready(function() {
-      // Общие функции
-      function showLoader() {
-        $('body').append('<div class="loader-overlay"><div class="loader"></div></div>');
-      }
-      
-      function hideLoader() {
-        $('.loader-overlay').remove();
-      }
-      
-      function showError(message) {
-        alert(message);
-      }
-      
-      // Обработчики количества
-      function handleQuantityChange(modelId, newQuantity) {
-        showLoader();
-        
-        $.ajax({
-          url: '/update-cart-item',
-          method: 'POST',
-          data: {
-            model_id: modelId,
-            quantity: newQuantity
-          },
-          success: function(response) {
-            if (response.success) {
-              location.reload();
-            } else {
-              showError(response.error || 'Ошибка обновления корзины');
-            }
-          },
-          error: function() {
-            showError('Ошибка соединения с сервером');
-          },
-          complete: hideLoader
-        });
-      }
+<script>
+  $(function() {
+    // ===== Функции общей работы =====
+    function showLoader() {
+      $('body').append('<div class="loader-overlay"><div class="loader"></div></div>');
+    }
+    function hideLoader() {
+      $('.loader-overlay').remove();
+    }
+    function showError(message) {
+      alert(message);
+    }
+    function handleQuantityChange(modelId, newQuantity) {
+      showLoader();
+      $.ajax({
+        url: '/update-cart-item',
+        method: 'POST',
+        data: { model_id: modelId, quantity: newQuantity },
+        success(response) {
+          if (response.success) location.reload();
+          else showError(response.error || 'Ошибка обновления корзины');
+        },
+        error() {
+          showError('Ошибка соединения с сервером');
+        },
+        complete: hideLoader
+      });
+    }
+
+    // ===== Пересчёт суммы =====
+    function recalcCartTotal() {
+      let sum = 0;
+      $('.cart-item').each(function() {
+        const $item = $(this);
+        if ($item.find('input.service-checkbox').is(':checked')) {
+          sum += parseFloat($item.data('item-total')) || 0;
+        }
+      });
+      $('#cartTotalValue').text(sum.toFixed(2));
+    }
+
+    // ===== Селект "Выбрать все" =====
+    const $selectAll = $('#selectAll');
+    const $itemCheckboxes = $('.cart-item input.service-checkbox');
+
+    $selectAll.on('change', function() {
+      $itemCheckboxes.prop('checked', this.checked);
+      recalcCartTotal();
+    });
+
+    $itemCheckboxes.on('change', recalcCartTotal);
+
+    // ===== Контролы количества =====
     $(document).on('click', '.quantity-btn.plus, .quantity-btn.minus', function() {
       const $card = $(this).closest('.cart-item');
       const $input = $card.find('.quantity-input');
-      let qty = parseInt($input.val()) || 1;
-
-      if ($(this).hasClass('plus')) {
-        qty++;
-      } else if (qty > 1) {
-        qty--;
-      }
-
+      let qty = parseInt($input.val(), 10) || 1;
+      qty = $(this).hasClass('plus') ? qty + 1 : Math.max(1, qty - 1);
       $input.val(qty);
-
-      // 2) Пересчитываем локальную сумму для этой карточки
       const price = parseFloat($card.find('.cart-item-price span').text()) || 0;
       const itemTotal = price * qty;
       $card.find('.cart-item-total').text(`Всего: ${itemTotal.toFixed(2)} ¥`);
       $card.data('item-total', itemTotal);
-
-      // 3) Пересчитываем общий итог
       recalcCartTotal();
     });
 
-    // 4) Обработчик прямого ввода
     $(document).on('change', '.quantity-input', function() {
       const $card = $(this).closest('.cart-item');
-      let qty = parseInt($(this).val());
+      let qty = parseInt($(this).val(), 10);
       if (isNaN(qty) || qty < 1) qty = 1;
       $(this).val(qty);
-
       const price = parseFloat($card.find('.cart-item-price span').text()) || 0;
       const itemTotal = price * qty;
       $card.find('.cart-item-total').text(`Всего: ${itemTotal.toFixed(2)} ¥`);
       $card.data('item-total', itemTotal);
-
       recalcCartTotal();
     });
 
-      
-      // Удаление товара
+    // ===== Удаление товара =====
     $(document).on('click', '.remove-btn', function() {
       const modelId = $(this).data('model-id');
       if (!confirm('Удалить товар навсегда?')) return;
-
       showLoader();
       fetch('/remove-cart-item', {
         method: 'POST',
@@ -470,13 +474,9 @@
       .then(data => {
         hideLoader();
         if (data.success) {
-          // удаляем элемент из DOM
           $(`.cart-item[data-model-id="${modelId}"]`).remove();
-          // пересчитываем итог (если нужно)
           recalcCartTotal();
-        } else {
-          showError(data.error || 'Не удалось удалить товар');
-        }
+        } else showError(data.error || 'Не удалось удалить товар');
       })
       .catch(() => {
         hideLoader();
@@ -484,52 +484,41 @@
       });
     });
 
-      // Оформление заказа
-      $('#checkoutBtn').click(function() {
-        showLoader();
-        
-        $.ajax({
-          url: '/checkout',
-          method: 'POST',
-          success: function(response) {
-            if (response.success) {
-              window.location.href = '/order/' + response.order_id;
-            } else {
-              showError(response.error || 'Ошибка оформления заказа');
-            }
-          },
-          error: function() {
-            showError('Ошибка соединения с сервером');
-          },
-          complete: hideLoader
-        });
+    // ===== Оформление заказа =====
+    $('#checkoutBtn').on('click', function() {
+      showLoader();
+      const selectedItems = [];
+      $('.cart-item input.service-checkbox:checked').each(function() {
+        const modelId = $(this).data('model-id');
+        const qty = parseInt($(this).closest('.cart-item').find('.quantity-input').val(), 10) || 1;
+        selectedItems.push({ model_id: modelId, quantity: qty });
+      });
+      if (!selectedItems.length) {
+        hideLoader();
+        showError('Пожалуйста, выберите хотя бы один товар для оформления заказа.');
+        return;
+      }
+      $.ajax({
+        url: '/checkout/init',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ items: selectedItems }),
+        success(response) {
+          hideLoader();
+          if (response.success) window.location.href = '/checkout';
+          else showError(response.error || 'Не удалось начать оформление заказа');
+        },
+        error() {
+          hideLoader();
+          showError('Ошибка соединения с сервером');
+        }
       });
     });
 
-    $('#selectAll').change(function() {
-      const checked = $(this).is(':checked');
-      $('.cart-item-select').prop('checked', checked);
-      recalcCartTotal();
-    });
+    // Инициалный пересчёт
+    recalcCartTotal();
+  });
+</script>
 
-  function recalcCartTotal() {
-    let sum = 0;
-    $('.cart-item').each(function() {
-      const $item = $(this);
-      const checked = $item.find('.cart-item-select').is(':checked');
-      if (checked) {
-        // читаем значение из data-атрибута
-        const itemTotal = parseFloat($item.data('item-total')) || 0;
-        sum += itemTotal;
-      }
-    });
-    // Обновляем DOM
-    $('#cartTotalValue').text(sum.toFixed(2));
-  }
-
-  $('.cart-item-select').change(recalcCartTotal);
-
-  recalcCartTotal();
-  </script>
 </body>
 </html>

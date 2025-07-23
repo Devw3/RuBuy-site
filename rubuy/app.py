@@ -279,6 +279,12 @@ def course():
     rate = get_cny_to_rub_rate()
     return render_template('main_menu/curs.html', rate=rate)
 
+@app.route('/terms')
+@login_required
+def terms():
+    return render_template('terms.html')
+
+
 # Профиль
 
 @app.route('/profile/balance')
@@ -759,7 +765,59 @@ def remove_cart_item():
         
     except Exception as e:
         return jsonify(success=False, error=f'Ошибка: {str(e)}'), 400
+    
+@app.route('/checkout/init', methods=['POST'])
+@login_required
+def checkout_init():
+    data = request.get_json()
+    print("Полученные товары:", data)
+    items = data.get('items', [])
+    if not items:
+        return jsonify(success=False, error="Нет товаров"), 400
 
+    # сохраняем в сессии
+    session['checkout_items'] = items
+    return jsonify(success=True)
+    
+@app.route('/checkout', methods=['GET'])
+@login_required
+def checkout():
+    items = session.get('checkout_items')
+    if not items:
+        return redirect(url_for('basket'))
+
+    user_id = session['user']['id']
+    balance_cny = db.get_balance(user_id)['cny']
+
+    cart_items = []
+    total = 0.0
+
+    for entry in items:
+        model_id = entry['model_id']
+        qty = int(entry['quantity'])
+        
+        row = db.get_model_info(model_id)
+
+        if not row:
+            continue
+
+        item_total = row['price'] * qty
+        total += item_total
+
+        cart_items.append({
+            'model_id': row['id'],
+            'color': row['color_name'],
+            'size': row['size_name'],
+            'price': row['price'],
+            'quantity': qty,
+            'image_url': row['image_url'],
+        })
+
+    return render_template('checkout.html',
+        cart_items=cart_items,
+        total=total,
+        balance=balance_cny
+    )
     
 if __name__ == '__main__':
     with app.app_context():

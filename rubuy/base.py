@@ -730,3 +730,9 @@ class Database:
                 WHERE status = 'temporary'
                 AND created_at < DATETIME('now', '-10 minutes')
             ''')
+
+    def get_model_info(self, model_id):
+        with self.get_cursor() as cursor:
+            cursor.execute('SELECT * FROM models WHERE id = ?', (model_id,))
+            product = cursor.fetchone()
+            return dict(product) if product else None
