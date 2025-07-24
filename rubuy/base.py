@@ -162,6 +162,40 @@ class Database:
                     FOREIGN KEY (product_id) REFERENCES products(id)
                 )
             ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cart_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    model_id INTEGER NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (model_id) REFERENCES models(id)
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS orders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    model_id INTEGER NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    status TEXT DEFAULT 'ordered',
+                    additional_services TEXT,
+                    total_price REAL,
+                    our_tracking_number TEXT,
+                    china_tracking_number TEXT,
+                    warehouse_location TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (model_id) REFERENCES models(id)
+                )
+            ''')
+
+
+            
     
     # ============== User Methods ==============
     
@@ -270,11 +304,22 @@ class Database:
                 'cny': float(result['balance_cny']) if result else 0.0
             }
 
-    def update_balance(self, user_id, amount):
+    def update_balance_rub(self, user_id, amount):
         with self.get_cursor() as cursor:
             try:
                 cursor.execute(
-                    'UPDATE users SET balance = balance + ? WHERE id = ?',
+                    'UPDATE users SET balance_rub = balance_rub + ? WHERE id = ?',
+                    (float(amount), user_id))
+                return True
+            except sqlite3.Error as e:
+                current_app.logger.error(f"Balance update failed: {str(e)}")
+                return False
+            
+    def update_balance_cny(self, user_id, amount):
+        with self.get_cursor() as cursor:
+            try:
+                cursor.execute(
+                    'UPDATE users SET balance_cny = balance_cny + ? WHERE id = ?',
                     (float(amount), user_id))
                 return True
             except sqlite3.Error as e:
@@ -483,34 +528,39 @@ class Database:
             return history
     
         # Вывод
-    def create_withdrawal(self, user_id: int, amount: float, card_number: str, 
+    def create_withdrawal(self, user_id: int, amount: float, card_number: str,
                         card_holder: str, name: str) -> bool:
         with self.get_cursor() as cursor:
             try:
+                # Если вы хотите сразу «заморозить» деньги на балансе,
+                # корректно списываем RUB и CNY:
                 cursor.execute("""
-                    UPDATE users 
-                    SET balance_rub = balance_rub - ?,
-                    SET balance_cny = balance_cny - ?,
+                    UPDATE users
+                    SET
+                        balance_rub = balance_rub - ?,
+                        balance_cny = balance_cny - ?
                     WHERE id = ?
-                """, (amount, user_id))
+                """, (amount, convert_rub_to_cny(amount), user_id))
 
+                # Вставляем заявку на вывод
                 cursor.execute('''
                     INSERT INTO withdrawals (
-                        user_id, amount, 
-                        card_number, card_holder, name,
-                        status, created_at
+                        user_id, amount, card_number,
+                        card_holder, name, status, created_at
                     ) VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'))
-                ''', (  # Явно указываем статус 'pending'
-                    user_id, 
+                ''', (
+                    user_id,
                     amount,
-                    card_number, 
+                    card_number,
                     card_holder,
                     name
                 ))
                 return cursor.lastrowid is not None
+
             except Exception as e:
-                print(f"Ошибка при создании вывода: {str(e)}")
+                print(f"Ошибка при создании вывода: {e}")
                 return False
+
             
     def get_user_withdrawals(self, user_id: int) -> list:
         with self.get_cursor() as cursor:
@@ -608,17 +658,6 @@ class Database:
     def add_product(self, product_data):
         with self.get_cursor() as cursor:
             try:
-                # cursor.execute('''
-                #     SELECT id FROM products 
-                #     WHERE title = ? AND base_price = ?
-                #     LIMIT 1
-                # ''', (product_data['title'], product_data['base_price']))
-                # existing_product = cursor.fetchone()
-                
-                # if existing_product:
-                #     return existing_product['id']
-
-                # 1. Добавляем основной товар
                 cursor.execute('''
                     INSERT INTO products (title, base_price)
                     VALUES (?, ?)
@@ -723,6 +762,43 @@ class Database:
                 'variants': variants
             }
         
+    # корзина
+        
+    def add_cart_item(self, user_id: int, model_id: int, quantity: int):
+        with self.get_cursor() as cursor:
+            # Проверим, есть ли уже запись
+            cursor.execute(
+                'SELECT id, quantity FROM cart_items WHERE user_id = ? AND model_id = ?',
+                (user_id, model_id)
+            )
+            existing = cursor.fetchone()
+            if existing:
+                new_qty = existing['quantity'] + quantity
+                cursor.execute(
+                    'UPDATE cart_items SET quantity = ? WHERE id = ?',
+                    (new_qty, existing['id'])
+                )
+            else:
+                cursor.execute(
+                    'INSERT INTO cart_items (user_id, model_id, quantity) VALUES (?, ?, ?)',
+                    (user_id, model_id, quantity)
+                )
+
+    def get_cart_items(self, user_id: int) -> list:
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                '''
+                SELECT c.model_id, c.quantity, m.price, m.color_name, m.size_name,
+                       m.image_url, p.title AS product_title
+                FROM cart_items c
+                JOIN models m ON c.model_id = m.id
+                JOIN products p ON m.product_id = p.id
+                WHERE c.user_id = ?
+                ''', (user_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+        
     def clean_old_temporary_models(self):
         with self.get_cursor() as cursor:
             cursor.execute('''
@@ -736,3 +812,53 @@ class Database:
             cursor.execute('SELECT * FROM models WHERE id = ?', (model_id,))
             product = cursor.fetchone()
             return dict(product) if product else None
+        
+    def get_pending_orders(self):
+        with self.get_cursor() as cursor:
+            try:
+                cursor.execute('''
+                    SELECT 
+                        orders.id,
+                        users.name AS user_name,
+                        products.title AS product_title,
+                        models.color_name AS color,
+                        models.size_name AS size,
+                        orders.quantity,
+                        orders.status,
+                        orders.total_price,
+                        orders.our_tracking_number,
+                        orders.china_tracking_number,
+                        orders.warehouse_location,
+                        orders.created_at,
+                        orders.additional_services
+                    FROM orders
+                    JOIN users ON orders.user_id = users.id
+                    JOIN models ON orders.model_id = models.id
+                    JOIN products ON models.product_id = products.id
+                    ORDER BY orders.created_at DESC
+                ''')
+                
+                orders = cursor.fetchall()
+                
+                # Преобразуем в список словарей
+                columns = [column[0] for column in cursor.description]
+                orders_list = []
+                
+                for row in orders:
+                    order_dict = dict(zip(columns, row))
+                    # Обработка дополнительных услуг
+                    if order_dict['additional_services']:
+                        try:
+                            order_dict['additional_services'] = json.loads(order_dict['additional_services'])
+                        except:
+                            order_dict['additional_services'] = []
+                    else:
+                        order_dict['additional_services'] = []
+                        
+                    orders_list.append(order_dict)
+                    
+                return orders_list
+                
+            except sqlite3.Error as e:
+                print(f"Ошибка при получении заказов: {e}")
+                return []

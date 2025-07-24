@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Мои заказы</title>
+  <style>
+    :root {
+      --bg-color: #010103;
+      --card-bg: #232325;
+      /* --header-bg: #ac3b35; */
+      --header-bg: #51100c;
+      --text-light: #dcdcde;
+      --text-dark: #333;
+      --accent-red: #e53935;
+      --border-color: #3a3a3c;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-light);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      text-align: center;
+      margin: 20px 0 30px;
+      color: var(--text-light);
+      font-size: 2rem;
+    }
+    
+    .orders-list {
+      display: grid;
+      gap: 25px;
+    }
+    
+    .order {
+      background: var(--card-bg);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    .order-header {
+      background: var(--header-bg);
+      color: var(--text-light);
+      padding: 15px 20px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .order-items {
+      padding: 0 20px;
+    }
+    
+    .order-item {
+      display: flex;
+      align-items: flex-start;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border-color);
+      gap: 15px;
+    }
+    
+    .order-item:last-child {
+      border-bottom: none;
+    }
+    
+    .item-image {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    
+    .item-details {
+      flex: 1;
+    }
+    
+    .item-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-light);
+      font-size: 1rem;
+      text-decoration: none;
+    }
+    
+    .item-variant, 
+    .item-quantity,
+    .item-tracking {
+      color: var(--text-light);
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+      opacity: 0.8;
+    }
+    
+    .item-price {
+      color: var(--text-light);
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    
+    .item-status {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: rgba(229, 57, 53, 0.1);
+      color: var(--accent-red);
+      align-self: center;
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    
+    .status-ordered {
+      background: rgba(76, 175, 80, 0.1);
+      color: #4CAF50;
+    }
+    
+    .status-shipped {
+      background: rgba(3, 169, 244, 0.1);
+      color: #03A9F4;
+    }
+    
+    .status-delivered {
+      background: rgba(103, 58, 183, 0.1);
+      color: #673AB7;
+    }
+    
+    .no-orders {
+      text-align: center;
+      padding: 50px 20px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      font-size: 1.1rem;
+    }
+
+    .order-total {
+      display: flex;
+      justify-content: flex-end;
+      padding: 15px 0;
+    }
+
+    .total-amount {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-light);
+    }
+        
+    @media (max-width: 480px) {
+      .order-item {
+        gap: 7px;
+      }
+
+      .item-title {
+        font-size: 10px;
+      }
+
+      .item-variant, .item-quantity, .item-tracking {
+        font-size: 10px;
+        margin-bottom: 0px;
+      }
+      body {
+        padding: 10px;
+      }
+      
+      .item-image {
+        width: 100px;
+        height: 100px;
+      }
+
+      .item-price {
+        font-size: 12px;
+      }
+      
+      .item-status {
+        margin-left: 0;
+        margin-top: 10px;
+        align-self: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Мои заказы</h1>
+
+    {% if orders %}
+     <div class="orders-list">
+        {% for order in orders %}
+          <div class="order">
+            <div class="order-header">
+              <span>Заказ №{{ order['id'] }}</span>
+              <span>{{ order['created_at'].strftime('%d.%m.%Y %H:%M') }}</span>
+            </div>
+            
+            <div class="order-items">
+              {% for item in order['items'] %}
+                <div class="order-item">
+                  <img src="{{ item.get('image_url', '') }}" alt="{{ item.get('product_title', '') }}" class="item-image">
+                  
+                  <div class="item-details">
+                    <div class="item-title">{{ item.get('product_title', 'Без названия') }}</div>
+                    <div class="item-variant">
+                      Цвет: {{ item.get('color', 'не указан') }}
+                    </div>
+                    <div class="item-variant">
+                      Размер: {{ item.get('size', 'не указан') }}
+                    </div>
+                    <div class="item-tracking">
+                      Трек-номер: <strong>{{ order.get('our_tracking_number', 'ожидается') }}</strong>
+                    </div>
+                    <div class="item-quantity">Количество: {{ item.get('quantity', 0) }} шт.</div>
+                    <div class="item-price">
+                      {% if item.get('price') is not none and item.get('quantity') is not none %}
+                        {{ "%.2f"|format(item['price']) }} ¥ × {{ item['quantity'] }} = 
+                        {{ "%.2f"|format(item['price'] * item['quantity']) }} ¥
+                      {% else %}
+                        Цена не указана
+                      {% endif %}
+                    </div>
+                  </div>
+                  
+                  <div class="item-status status-{{ item.get('status', 'unknown') }}">
+                    {{ item.get('status', 'unknown') | replace('ordered', 'Принято') | replace('shipped', 'Отправлено') | replace('delivered', 'Доставлено') | capitalize }}
+                  </div>
+                </div>
+              {% endfor %}
+              
+              <!-- Блок с общей стоимостью заказа -->
+              <div class="order-total">
+                <div class="total-amount">
+                  {% set total = 0 %}
+                  {% for item in order['items'] %}
+                    {% if item.get('price') is not none and item.get('quantity') is not none %}
+                      {% set total = total + (item['price'] * item['quantity']) %}
+                    {% endif %}
+                  {% endfor %}
+                  Итого: <strong>{{ "%.2f"|format(total) }} ¥</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="no-orders">
+        <p>У вас пока нет заказов.</p>
+        <p><a href="/catalog" style="color: var(--accent-red); text-decoration: none;">Перейти в каталог →</a></p>
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>

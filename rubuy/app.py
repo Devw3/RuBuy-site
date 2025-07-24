@@ -2,8 +2,10 @@ import os
 from functools import wraps
 import sqlite3
 import time
+import json
 from datetime import timedelta
 import requests
+import random
 from threading import Thread
 from base import Database
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
@@ -34,18 +36,20 @@ def allowed_file(filename):
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user' not in session:
-            flash('Пожалуйста, войдите для доступа к этой странице', 'error')
+        if 'user' not in session or not session['user'].get('id'):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
 @app.route('/')
+@login_required
 def index():
-    if not session.get('user') or 'id' not in session['user']:
-        return redirect(url_for('login'))  # Перенаправляем на страницу входа
+    user = session.get('user')
+    if not user or not user.get('id'):
+        return redirect(url_for('login'))
     
-    return render_template('index.html', user=session['user'])
+    # Иначе — показываем index
+    return render_template('index.html', user=user)
 
 def start_cleanup_loop(db):
     def run():
@@ -193,12 +197,15 @@ def admin_panel():
     pending_replenishments = db.get_pending_replenishments()
     pending_withdrawals = db.get_pending_withdrawals()
 
+    orders = db.get_pending_orders()
+    print(orders)
     
     return render_template(
         'admin/admin_panel.html',
         user=user,
         replenishments=pending_replenishments,
-        withdrawals=pending_withdrawals
+        withdrawals=pending_withdrawals,
+        orders=orders
     )
     
 
@@ -237,29 +244,6 @@ def logout():
     session.pop('user', None)
     flash('Вы вышли из системы', 'info')
     return redirect(url_for('login'))
-
-@app.route('/basket')
-@login_required
-def basket():
-    try:
-        # Получаем корзину из сессии
-        cart = session.get('cart', {})
-        
-        # Если корзина в старом строковом формате, преобразуем
-        if isinstance(cart, str):
-            cart = json.loads(cart)
-        
-        # Преобразуем в список значений, если это словарь
-        cart_items = list(cart.values()) if isinstance(cart, dict) else cart
-        
-        # Вычисляем общую сумму
-        total = sum(float(item['price']) * int(item['quantity']) for item in cart_items)
-        
-        return render_template('basket.html', cart=cart_items, total=total)
-    
-    except Exception as e:
-        print(f"Ошибка при загрузке корзины: {str(e)}")
-        return render_template('basket.html', cart=[], total=0)
 
 # Основное меню
 
@@ -491,7 +475,10 @@ def withdraw():
                 return redirect(url_for('withdraw'))
             
             # Обновляем баланс пользователя
-            db.update_balance(user_id, -amount)
+            db.update_balance_rub(user_id, -amount)
+            amount_cny = convert_rub_to_cny(amount)
+            db.update_balance_cny(user_id, -amount_cny)
+
             
             flash('Заявка на вывод создана и ожидает обработки', 'success')
             return redirect(url_for('withdraw'))
@@ -534,9 +521,6 @@ def handle_withdrawal_action(withdrawal_id, action):
             user_balance = db.get_user_balance(user_id)
             if user_balance < amount:
                 return jsonify({'error': 'Недостаточно средств на балансе'}), 400
-            
-            # Списание средств
-            db.update_balance(user_id, -amount)
         
         # Обновляем статус заявки
         success = db.update_withdrawal_status(
@@ -573,58 +557,6 @@ def get_withdrawals_data():
         return jsonify({'error': str(e)}), 500
 
 
-# @app.route('/add_product', methods=['POST'])
-# def add_product():
-#     url = request.form['product_url'].strip()
-    
-#     try:
-#         if 'taobao.com' in url or 'tmall.com' in url:
-#             product = parse_taobao_product(url)
-#         elif 'weidian.com' in url:
-#             product = parse_weidian_product(url)
-#         else:
-#             return render_template('error.html', message="Неподдерживаемый сайт")
-        
-#         # Добавляем товар через метод класса (он вернет product_id)
-#         product_id = db.add_product(product)
-        
-#         return redirect(url_for('product_page', product_id=product_id))
-    
-#     except Exception as e:
-#         return render_template('error.html', message=f"Ошибка: {str(e)}")
-
-
-# @app.route('/product/<int:product_id>')
-# def product_page(product_id):
-#     try:
-#         # Получаем данные через метод класса
-#         product, models = db.get_product_with_models(product_id)
-        
-#         # Подготовка данных для шаблона (та же логика)
-#         colors = {}
-#         for model in models:
-#             color = model['color_name']
-#             if color not in colors:
-#                 colors[color] = {
-#                     'image_url': model['image_url'],
-#                     'sizes': []
-#                 }
-#             colors[color]['sizes'].append({
-#                 'size': model['size_name'],
-#                 'price': model['price'],
-#                 'stock': model['stock'],
-#                 'model_id': model['id']
-#             })
-        
-#         return render_template('product.html', 
-#                              product=product,
-#                              colors=colors)
-    
-#     except ValueError as e:
-#         return render_template('error.html', message=str(e))
-#     except Exception as e:
-#         return render_template('error.html', message=f"Ошибка: {str(e)}")
-
 @app.route('/add_product', methods=['POST'])
 def add_product():
     url = request.form['product_url'].strip()
@@ -659,87 +591,74 @@ def product_page(product_id):
         return render_template('error.html', message=str(e))
     except Exception as e:
         return render_template('error.html', message=f"Ошибка: {str(e)}")
+    
 
+# товары в корзину
 
 @app.route('/add-to-cart', methods=['POST'])
 @login_required
 def add_to_cart():
-    session.permanent = True
     try:
-        data = request.get_json()  # Для AJAX или используйте request.form для обычной формы
+        data = request.get_json()
         model_id = data['model_id']
         quantity = int(data.get('quantity', 1))
-        
-        with db.get_cursor() as cursor:
-            # Получаем конкретную модель (подтовар)
-            cursor.execute('''
-                SELECT 
-                    m.id as model_id,
-                    m.product_id,
-                    m.color_name as color,
-                    m.size_name as size,
-                    m.price,
-                    m.stock,
-                    m.image_url,
-                    p.title as product_title
-                FROM models m
-                JOIN products p ON m.product_id = p.id
-                WHERE m.id = ?
-            ''', (model_id,))
-            model = cursor.fetchone()
-            
-            if not model:
-                return jsonify(success=False, error='Модель не найдена'), 404
-            
-            if model['stock'] < quantity:
-                return jsonify(success=False, error='Недостаточно товара в наличии'), 400
-            
-            # Добавляем в корзину (сессию)
-            cart = session.get('cart', {})
-            cart_key = f"m{model_id}"  # Уникальный ключ для модели
-            
-            if cart_key in cart:
-                # Увеличиваем количество, если модель уже в корзине
-                cart[cart_key]['quantity'] += quantity
-            else:
-                # Добавляем новую модель
-                cart[cart_key] = {
-                    'model_id': model['model_id'],
-                    'product_id': model['product_id'],
-                    'product_title': model['product_title'],
-                    'color': model['color'],
-                    'size': model['size'],
-                    'price': float(model['price']),
-                    'image_url': model['image_url'],
-                    'quantity': quantity
-                }
-            
-            session['cart'] = cart
-            session.modified = True
-            
-            # Обновляем количество в БД
-            cursor.execute('''
-                UPDATE models 
-                SET stock = stock - ? 
-                WHERE id = ? AND stock >= ?
-            ''', (quantity, model_id, quantity))
+        user_id = session['user']['id']
 
-            # изменения статуса товара на доьбавлен в корзину
-            cursor.execute('''
+        # Проверяем наличие и сток
+        model = db.get_model_info(model_id)
+        if not model:
+            return jsonify(success=False, error='Модель не найдена'), 404
+        if model['stock'] < quantity:
+            return jsonify(success=False, error='Недостаточно товара в наличии'), 400
+
+        # Добавляем в корзину
+        db.add_cart_item(user_id, model_id, quantity)
+
+        # Обновляем сток и статус
+        with db.get_cursor() as cursor:
+            cursor.execute(
+                'UPDATE models SET stock = stock - ? WHERE id = ? AND stock >= ?',
+                (quantity, model_id, quantity)
+            )
+            cursor.execute(
+                """
                 UPDATE models
                 SET status = 'in_cart'
                 WHERE id = ?
-            ''', (model_id,))
-
-            return jsonify(
-                success=True,
-                message='Товар добавлен в корзину',
-                cart_count=len(cart),
-                cart_item=cart[cart_key]
+                """, (model_id,)
             )
-    
+
+        # Возвращаем обновлённую корзину
+        items = db.get_cart_items(user_id)
+        return jsonify(
+            success=True,
+            message='Товар добавлен в корзину',
+            cart_count=len(items),
+            cart_items=items
+        )
     except Exception as e:
-        return jsonify(success=False, error=f'Ошибка: {str(e)}'), 500
+        return jsonify(success=False, error=str(e)), 500
+    
+@app.route('/basket')
+@login_required
+def basket():
+    try:
+        # Берём из БД
+        user_id = session['user']['id']
+        items = db.get_cart_items(user_id)
+        for it in items:
+            if 'color_name' in it:
+                it['color'] = it.pop('color_name')
+            if 'size_name' in it:
+                it['size'] = it.pop('size_name')
+
+        # Считаем общую сумму
+        total = sum(it['price'] * it['quantity'] for it in items)
+
+        return render_template('basket.html', cart=items, total=total)
+    except Exception as e:
+        app.logger.error(f"Ошибка при загрузке корзины для user_id={user_id}: {e}")
+        return render_template('basket.html', cart=[], total=0)
 
 @app.route('/remove-cart-item', methods=['POST'])
 def remove_cart_item():
@@ -818,6 +737,155 @@ def checkout():
         total=total,
         balance=balance_cny
     )
+
+@app.route('/process-payment', methods=['POST'])
+@login_required
+def process_payment():
+    try:
+        data = request.get_json() or {}
+        items = data.get('items') or []
+        services = data.get('services', [])
+
+        if not isinstance(items, list) or not items:
+            return jsonify(success=False, error='Неверные данные товаров'), 400
+
+        # 1) Собираем детальную информацию по товарам и считаем total_products
+        detailed = []
+        total_products = 0.0
+        for idx, it in enumerate(items):
+            raw_mid = it.get('model_id')
+            if raw_mid is None:
+                return jsonify(success=False, error=f'model_id не указан в позиции {idx+1}'), 400
+            try:
+                model_id = int(raw_mid)
+            except ValueError:
+                return jsonify(success=False, error=f'Некорректный model_id в позиции {idx+1}'), 400
+
+            raw_qty = it.get('quantity', 1)
+            try:
+                qty = int(raw_qty)
+            except (ValueError, TypeError):
+                qty = 1
+
+            row = db.get_model_info(model_id)
+            if not row:
+                return jsonify(success=False, error=f'Модель {model_id} не найдена'), 404
+
+            price = float(row['price'])
+            total_products += price * qty
+            detailed.append({'model_id': model_id, 'quantity': qty, 'price': price})
+
+        # 2) Считаем услуги
+        service_prices = {'photos': 10, 'video': 30, 'inspection': 20}
+        total_services = sum(service_prices.get(s, 0) for s in services)
+
+        # 3) Общая стоимость в юанях
+        total_cny = total_products + total_services
+        # 4) Проверяем баланс CNY и списываем
+        user_id = session['user']['id']
+        balance_cny = db.get_balance(user_id)['cny']
+        if total_cny > balance_cny:
+            return jsonify(success=False, error='Недостаточно средств на балансе CNY'), 400
+        db.update_balance_cny(user_id, -total_cny)
+
+        total_rub = convert_cny_to_rub(total_cny)
+        db.update_balance_rub(user_id, -total_rub)
+
+        with db.get_cursor() as cursor:
+            while True:
+                rand_num = random.randint(100000000, 9999999999)
+                our_track = f'RUB{rand_num}'
+                cursor.execute(
+                    "SELECT COUNT(*) AS cnt FROM orders WHERE our_tracking_number = ?",
+                    (our_track,)
+                )
+                if cursor.fetchone()['cnt'] == 0:
+                    break
+
+        order_id = None
+        with db.get_cursor() as cursor:
+            for idx, it in enumerate(detailed):
+                cursor.execute('''
+                    INSERT INTO orders (
+                        user_id, model_id, quantity,
+                        status, additional_services,
+                        total_price, our_tracking_number,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, 'ordered', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (
+                    user_id,
+                    it['model_id'],
+                    it['quantity'],
+                    json.dumps(services),
+                    total_cny if idx == 0 else None,
+                    our_track  if idx == 0 else None
+                ))
+                if idx == 0:
+                    order_id = cursor.lastrowid
+
+                cursor.execute(
+                    "UPDATE models SET status = 'Принято' WHERE id = ?",
+                    (it['model_id'],)
+                )
+
+        return jsonify(success=True, order_id=order_id, tracking_number=our_track)
+
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
+
+@app.route('/profile/orders')
+@login_required
+def profile_orders():
+    user_id = session['user']['id']
+    # 1) Забираем все данные
+    with db.get_cursor() as cursor:
+        cursor.execute('''
+            SELECT 
+                o.id            AS order_id,
+                o.created_at    AS order_date,
+                o.our_tracking_number,
+                o.total_price,
+                o.model_id,
+                o.quantity,
+                o.status,
+                m.image_url,
+                m.color_name    AS color,
+                m.size_name     AS size,
+                m.price         AS unit_price,
+                p.title         AS product_title
+            FROM orders o
+            JOIN models m ON o.model_id = m.id
+            JOIN products p ON m.product_id = p.id
+            WHERE o.user_id = ?
+            ORDER BY o.created_at DESC, o.id, o.model_id
+        ''', (user_id,))
+        rows = [dict(r) for r in cursor.fetchall()]
+
+    # 2) Группируем по order_id
+    orders = []
+    current = None
+    for r in rows:
+        if current is None or current['id'] != r['order_id']:
+            current = {
+                'id': r['order_id'],
+                'created_at': r['order_date'],
+                'our_tracking_number': r['our_tracking_number'],
+                'total_price': r['total_price'],
+                'items': []
+            }
+            orders.append(current)
+        current['items'].append({
+            'product_title': r['product_title'],
+            'image_url': r['image_url'],
+            'color': r['color'],
+            'size': r['size'],
+            'price': r['unit_price'],
+            'quantity': r['quantity'],
+            'status': r['status']
+        })
+
+    # 3) Рендерим с контекстом
+    return render_template('profile/orders.html', orders=orders)
     
 if __name__ == '__main__':
     with app.app_context():

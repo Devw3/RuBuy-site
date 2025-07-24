@@ -47,12 +47,12 @@
               <div class="wallet-label text-secondary mb-3">Мой кошелек</div>
 
               <div class="icon-menu mb-4">
-                <div class="icon-item d-flex align-items-center p-2">
+                <a href="{{ url_for('profile_orders') }}" class="icon-item d-flex align-items-center p-2 text-decoration-none">
                   <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
                   </svg>
                   <span class="icon-text text-light">Заказы</span>
-                </div>
+                </a>
                 <div class="icon-item d-flex align-items-center p-2">
                   <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>

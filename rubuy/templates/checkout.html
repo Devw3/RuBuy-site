@@ -105,7 +105,7 @@
         }
         
         .item-price {
-            color: #e53935;
+            color: #fdfdfd;
             font-weight: bold;
         }
         
@@ -163,7 +163,7 @@
         }
         
         .service-price {
-            color: #e53935;
+            color: #fdfdfd;
             font-weight: bold;
             min-width: 60px;
             text-align: right;
@@ -231,7 +231,7 @@
         }
         
         .total-amount {
-            color: #e53935;
+            color: #fdfdfd;
         }
         
         .pay-btn {
@@ -306,21 +306,33 @@
         <!-- Блок с товарами -->
         <div class="checkout-items">
             {% for item in cart_items %}
-            <div class="checkout-item">
-                <img src="{{ item.image_url }}" alt="{{ item.product_title }}" class="item-image" referrerpolicy="no-referrer">
+            <div 
+                class="checkout-item" 
+                data-model-id="{{ item.model_id }}"
+                data-quantity="{{ item.quantity }}"
+            >
+                <img src="{{ item.image_url }}" 
+                    alt="{{ item.product_title }}" 
+                    class="item-image" 
+                    referrerpolicy="no-referrer">
                 <div class="item-details">
-                    <div class="item-title">{{ item.product_title }}</div>
-                    <div class="item-variants">
-                        Цвет: {{ item.color }}, Размер: {{ item.size }}
-                    </div>
-                    <div class="item-price">{{ item.price | round(2) }} ¥ × {{ item.quantity }} шт.</div>
+                <div class="item-title">{{ item.product_title }}</div>
+                <div class="item-variants">
+                    Цвет: {{ item.color }}, Размер: {{ item.size }}
+                </div>
+                <div class="item-price">
+                    {{ item.price | round(2) }} ¥ × {{ item.quantity }} шт.
+                </div>
                 </div>
                 <div class="item-total">
-                    <span class="item-price">{{ (item.price * item.quantity) | round(2) }} ¥</span>
+                <span class="item-price">
+                    {{ (item.price * item.quantity) | round(2) }} ¥
+                </span>
                 </div>
             </div>
             {% endfor %}
         </div>
+
         
         <!-- Блок с дополнительными услугами -->
         <div class="additional-services">
@@ -455,13 +467,17 @@
             
             // Обработка оплаты
             payBtn.addEventListener('click', function() {
+                // Собираем товары из разметки
+                const items = Array.from(document.querySelectorAll('.checkout-item'))
+                    .map(el => ({
+                        model_id: parseInt(el.dataset.modelId, 10),
+                        quantity:  parseInt(el.dataset.quantity, 10)
+                }));
+
                 // Собираем выбранные услуги
-                const selectedServices = [];
-                servicesCheckboxes.forEach(checkbox => {
-                    if (checkbox.checked) {
-                        selectedServices.push(checkbox.value);
-                    }
-                });
+                const services = Array.from(servicesCheckboxes)
+                        .filter(ch => ch.checked)
+                        .map(ch => ch.value);   
                 
                 // Показываем индикатор загрузки
                 payBtn.disabled = true;
@@ -470,17 +486,15 @@
                 // Отправляем запрос на сервер
                 fetch('/process-payment', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        services: selectedServices
-                    })
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ items, services })
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        window.location.href = '/order-success/' + data.order_id;
+                        alert('Товар оплачен! Следите за статусом в разделе «Мои заказы».');
+                        // И переходим туда
+                        window.location.href = '/profile/orders'
                     } else {
                         alert('Ошибка оплаты: ' + (data.error || 'Попробуйте снова'));
                         payBtn.disabled = false;
