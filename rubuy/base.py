@@ -860,3 +860,20 @@ class Database:
             except sqlite3.Error as e:
                 print(f"Ошибка при получении заказов: {e}")
                 return []
+                
+    def update_order_status(self, order_id, new_status):
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(
+                    '''
+                    UPDATE orders
+                    SET status = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    ''',
+                    (new_status, order_id)
+                )
+            return True
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+

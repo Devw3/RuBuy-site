@@ -883,28 +883,23 @@ def profile_orders():
     # 3) Рендерим с контекстом
     return render_template('profile/orders.html', orders=orders)
     
-@app.route('/update_order_status', methods=['POST'])
-@admin_required  # Защитите роут для админов
-def update_order_status():
-    try:
-        data = request.get_json()
-        order_id = data['order_id']
-        new_status = data['status']
-        
-        # Обновляем статус в БД
-        conn = sqlite3.connect('your_database.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE orders 
-            SET status = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (new_status, order_id))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+@app.route('/api/orders/<int:order_id>/status', methods=['POST'])
+@admin_required 
+def update_status(order_id):
+    data = request.get_json() or {}
+    new_status = data.get('status')
+    if not new_status:
+        return jsonify({'success': False, 'error': 'Missing "status" field'}), 400
+
+    result = db.update_order_status(order_id, new_status)
+    if result is True:
+        return jsonify({'success': True}), 200
+    else:
+        # если метод вернул dict с ошибкой
+        if isinstance(result, dict):
+            return jsonify(result), 500
+        # на всякий случай — общая ошибка
+        return jsonify({'success': False, 'error': 'Unknown error'}), 500
     
 if __name__ == '__main__':
     with app.app_context():

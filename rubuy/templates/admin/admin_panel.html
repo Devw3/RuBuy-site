@@ -560,17 +560,34 @@
                     </div>
 
                     <!-- В блоке деталей заказа -->
-                <div class="detail-item" style="grid-column: span 2;">
-                    <strong>Статус:</strong>
-                    <select class="status-select" data-order-id="{{ order.id }}">
-                        <option value="processing" {% if order.status == 'ordered' %}selected{% endif %}>Передано в обработку</option>
-                        <option value="purchased" {% if order.status == 'purchased' %}selected{% endif %}>Выкуплено</option>
-                        <option value="seller_sent" {% if order.status == 'seller_sent' %}selected{% endif %}>Отправлено продавцом</option>
-                        <option value="in_transit" {% if order.status == 'in_transit' %}selected{% endif %}>В пути</option>
-                        <option value="in_warehouse" {% if order.status == 'in_warehouse' %}selected{% endif %}>На складе</option>
-                    </select>
-                    <button class="btn-save-status" data-order-id="{{ order.id }}">Сохранить</button>
-                </div>
+                    <div class="detail-item" style="grid-column: span 2;">
+                        <strong>Статус:</strong>
+                        <select class="status-select" data-order-id="{{ order.id }}">
+                            <option value="processing" {% if order.status == 'ordered' %}selected{% endif %}>Передано в обработку</option>
+                            <option value="purchased" {% if order.status == 'purchased' %}selected{% endif %}>Выкуплено</option>
+                            <option value="seller_sent" {% if order.status == 'seller_sent' %}selected{% endif %}>Отправлено продавцом</option>
+                            <option value="in_transit" {% if order.status == 'in_transit' %}selected{% endif %}>В пути</option>
+                            <option value="in_warehouse" {% if order.status == 'in_warehouse' %}selected{% endif %}>На складе</option>
+                        </select>
+                        <button class="btn-save-status" data-order-id="{{ order.id }}">Сохранить</button>
+                    </div>
+
+                    <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
+                        <strong>Стоимость доставки по Китаю (¥):</strong>
+                        <input 
+                            type="number" 
+                            class="cn-delivery-price-input" 
+                            data-order-id="{{ order.id }}"
+                            min="0" 
+                            step="0.01" 
+                            placeholder="0.00"
+                            value="{{ order.cn_delivery_price or '' }}"
+                            style="width: 100px;"
+                        >
+                    </div>
+                    <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
+                        <button class="btn-save-status" data-order-id="{{ order.id }}">Сохранить</button>
+                    </div>
                 </td>
                 </tr>
                 {% else %}
@@ -799,6 +816,30 @@
                     detailsRow.style.display = detailsRow.style.display === 'table-row' ? 'none' : 'table-row';
                 });
                 })
+
+            // --- Обработчик сохранения статуса заказа ---
+            document.querySelectorAll('.btn-save-status').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const orderId = btn.dataset.orderId;
+                const select = document.querySelector(`.status-select[data-order-id="${orderId}"]`);
+                const newStatus = select.value;
+
+                try {
+                const resp = await fetch(`/api/orders/${orderId}/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                if (!resp.ok) throw new Error('Сервер вернул ошибку');
+                
+                alert('Статус успешно обновлён');
+                // при желании тут можно автоматически убрать кнопку либо обновить строку
+                } catch (err) {
+                console.error(err);
+                alert('Не удалось сохранить статус: ' + err.message);
+                }
+            });
+            });
 
             // Инициализация
             initTabs();
