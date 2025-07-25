@@ -1,6 +1,7 @@
 import sqlite3
 import requests
 import os
+import json
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import current_app, g
 from contextlib import contextmanager
@@ -152,6 +153,7 @@ class Database:
                 CREATE TABLE IF NOT EXISTS models (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     product_id INTEGER,
+                    product_url TEXT,
                     color_name TEXT,
                     size_name TEXT,
                     price REAL,
@@ -532,16 +534,6 @@ class Database:
                         card_holder: str, name: str) -> bool:
         with self.get_cursor() as cursor:
             try:
-                # Если вы хотите сразу «заморозить» деньги на балансе,
-                # корректно списываем RUB и CNY:
-                cursor.execute("""
-                    UPDATE users
-                    SET
-                        balance_rub = balance_rub - ?,
-                        balance_cny = balance_cny - ?
-                    WHERE id = ?
-                """, (amount, convert_rub_to_cny(amount), user_id))
-
                 # Вставляем заявку на вывод
                 cursor.execute('''
                     INSERT INTO withdrawals (
@@ -655,7 +647,7 @@ class Database:
                 raise
 
     # работа с товарами
-    def add_product(self, product_data):
+    def add_product(self, product_data, url):
         with self.get_cursor() as cursor:
             try:
                 cursor.execute('''
@@ -672,15 +664,17 @@ class Database:
                     cursor.execute('''
                         INSERT INTO models (
                             product_id, 
+                            product_url,
                             color_name, 
                             size_name, 
                             price, 
                             stock, 
                             image_url
                         )
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         product_id,
+                        url,
                         model.get('color_name', ''),
                         model.get('size_name', ''),
                         model.get('price', base_price),
@@ -797,7 +791,6 @@ class Database:
                 ''', (user_id,)
             )
             return [dict(row) for row in cursor.fetchall()]
-
         
     def clean_old_temporary_models(self):
         with self.get_cursor() as cursor:
@@ -821,6 +814,7 @@ class Database:
                         orders.id,
                         users.name AS user_name,
                         products.title AS product_title,
+                        models.product_url AS url,
                         models.color_name AS color,
                         models.size_name AS size,
                         orders.quantity,
@@ -839,24 +833,28 @@ class Database:
                 ''')
                 
                 orders = cursor.fetchall()
-                
-                # Преобразуем в список словарей
                 columns = [column[0] for column in cursor.description]
                 orders_list = []
                 
                 for row in orders:
                     order_dict = dict(zip(columns, row))
-                    # Обработка дополнительных услуг
-                    if order_dict['additional_services']:
-                        try:
-                            order_dict['additional_services'] = json.loads(order_dict['additional_services'])
-                        except:
-                            order_dict['additional_services'] = []
-                    else:
-                        order_dict['additional_services'] = []
-                        
-                    orders_list.append(order_dict)
                     
+                    additional_services = order_dict['additional_services']
+                    if additional_services:
+                        try:
+                            services_str = additional_services.strip('"\'')
+                            services_list = json.loads(services_str)
+                            order_dict['additional_services_list'] = services_list
+                        except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                            print(f"Ошибка при парсинге additional_services: {e}")
+                            order_dict['additional_services_list'] = []
+                    else:
+                        order_dict['additional_services_list'] = []
+                    
+                    orders_list.append(order_dict)
+
+
+                print(orders_list)
                 return orders_list
                 
             except sqlite3.Error as e:

@@ -197,9 +197,7 @@ def admin_panel():
     pending_replenishments = db.get_pending_replenishments()
     pending_withdrawals = db.get_pending_withdrawals()
 
-    orders = db.get_pending_orders()
-    print(orders)
-    
+    orders = db.get_pending_orders()    
     return render_template(
         'admin/admin_panel.html',
         user=user,
@@ -474,12 +472,6 @@ def withdraw():
                 flash('Ошибка при создании заявки', 'error')
                 return redirect(url_for('withdraw'))
             
-            # Обновляем баланс пользователя
-            db.update_balance_rub(user_id, -amount)
-            amount_cny = convert_rub_to_cny(amount)
-            db.update_balance_cny(user_id, -amount_cny)
-
-            
             flash('Заявка на вывод создана и ожидает обработки', 'success')
             return redirect(url_for('withdraw'))
             
@@ -519,6 +511,10 @@ def handle_withdrawal_action(withdrawal_id, action):
         # Для подтверждения - проверяем баланс и списываем средства
         if action == 'approve':
             user_balance = db.get_user_balance(user_id)
+            db.update_balance_rub(user_id, -amount)
+            amount_cny = convert_rub_to_cny(amount)
+            db.update_balance_cny(user_id, -amount_cny)
+
             if user_balance < amount:
                 return jsonify({'error': 'Недостаточно средств на балансе'}), 400
         
@@ -569,7 +565,7 @@ def add_product():
         else:
             return render_template('error.html', message="Неподдерживаемый сайт")
         
-        product_id = db.add_product(product)
+        product_id = db.add_product(product, url)
         
         return redirect(url_for('product_page', product_id=product_id))
     
@@ -886,6 +882,29 @@ def profile_orders():
 
     # 3) Рендерим с контекстом
     return render_template('profile/orders.html', orders=orders)
+    
+@app.route('/update_order_status', methods=['POST'])
+@admin_required  # Защитите роут для админов
+def update_order_status():
+    try:
+        data = request.get_json()
+        order_id = data['order_id']
+        new_status = data['status']
+        
+        # Обновляем статус в БД
+        conn = sqlite3.connect('your_database.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE orders 
+            SET status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (new_status, order_id))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
     
 if __name__ == '__main__':
     with app.app_context():

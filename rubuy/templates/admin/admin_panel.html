@@ -344,6 +344,21 @@
             color: var(--gray-color);
         }
 
+        .order-summary {
+            width: 200px;
+        }
+
+        .orders-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .orders-table td {
+            padding: 3px 6px;
+            font-size: 12px;
+            line-height: 1.3;
+        }
+
+
         @media (max-width: 768px) {
             .admin-container {
                 padding: 15px;
@@ -458,7 +473,7 @@
                         <tr data-id="{{ withdrawal.id }}">
                             <td>{{ withdrawal.id }}</td>
                             <td>{{ withdrawal.user_name }}</td>
-                            <td>{{ "%.2f"|format(withdrawal.amount) }} ₽</td>
+                            <td>{{ "%.2f"|format(withdrawal.amount) }} ¥</td>
                             <td>**** {{ withdrawal.card_last_four }}</td>
                             <td>{{ withdrawal.name }}</td>
                             <td>{{ withdrawal.created_at.strftime('%Y-%m-%d %H:%M') if withdrawal.created_at else '' }}</td>
@@ -498,10 +513,10 @@
                 <th>ID</th>
                 <th>Дата и время</th>
                 <th>Трек‑номер</th>
-                <th>Пользователь</th>
+                <th>Ссылка на товар</th>
                 <th>Товар</th>
                 <th>Кол‑во</th>
-                <th>Сумма, ₽</th>
+                <th>Сумма</th>
                 </tr>
             </thead>
             <tbody>
@@ -511,7 +526,7 @@
                 <td>#{{ order.id }}</td>
                 <td>{{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                 <td>{{ order.our_tracking_number or '—' }}</td>
-                <td>{{ order.user_name }}</td>
+                <td>{{ order.url }}</td>
                 <td>{{ order.product_title }}</td>
                 <td>{{ order.quantity }}</td>
                 <td>{{ "%.2f"|format(order.total_price) }}</td>
@@ -528,17 +543,34 @@
                     {% if order.warehouse_location %}
                     <div class="detail-item"><strong>Склад:</strong> {{ order.warehouse_location }}</div>
                     {% endif %}
-                    {% if order.additional_services %}
-                    <div class="detail-item" style="grid-column: span 2;">
-                        <strong>Доп. услуги:</strong>
-                        <ul>
-                        {% for svc in order.additional_services %}
-                        <li>{{ svc.name }} — {{ "%.2f"|format(svc.price) }} ₽</li>
-                        {% endfor %}
-                        </ul>
-                    </div>
+                    {% if order.additional_services_list %}
+                        <div class="detail-item" style="grid-column: span 2;">
+                            <strong>Доп. услуги:</strong>
+                            <ul>
+                                {% for svc in order.additional_services_list %}
+                                <li>
+                                    {% if svc == 'photos' %}Дополнительные фото{% endif %}
+                                    {% if svc == 'video' %}Видеоотчёт{% endif %}
+                                    {% if svc == 'inspection' %}Тчательная проверка{% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
                     {% endif %}
                     </div>
+
+                    <!-- В блоке деталей заказа -->
+                <div class="detail-item" style="grid-column: span 2;">
+                    <strong>Статус:</strong>
+                    <select class="status-select" data-order-id="{{ order.id }}">
+                        <option value="processing" {% if order.status == 'ordered' %}selected{% endif %}>Передано в обработку</option>
+                        <option value="purchased" {% if order.status == 'purchased' %}selected{% endif %}>Выкуплено</option>
+                        <option value="seller_sent" {% if order.status == 'seller_sent' %}selected{% endif %}>Отправлено продавцом</option>
+                        <option value="in_transit" {% if order.status == 'in_transit' %}selected{% endif %}>В пути</option>
+                        <option value="in_warehouse" {% if order.status == 'in_warehouse' %}selected{% endif %}>На складе</option>
+                    </select>
+                    <button class="btn-save-status" data-order-id="{{ order.id }}">Сохранить</button>
+                </div>
                 </td>
                 </tr>
                 {% else %}
