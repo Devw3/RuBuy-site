@@ -166,6 +166,12 @@
                   Цена не указана
                 {% endif %}
               </div>
+              {% if order.cn_delivery_price %}
+                <div class="delivery-info">
+                    <strong>Доставка по Китаю:</strong>
+                    <span>{{ order.cn_delivery_price|float }} ¥</span>
+                </div>
+              {% endif %}
             </div>
             <div class="item-status status-{{ item.status or order.status }}">
               {% if item.status == 'ordered' %}Заказан{% endif %}
@@ -175,11 +181,6 @@
               {% if item.status == 'in_transit' %}В пути{% endif %}
               {% if item.status == 'in_warehouse' %}На складе{% endif %}
             </div>
-            {% if order.cn_delivery_price is not none %}
-              <div class="order-delivery-price" style="padding: 10px 20px; color: var(--text-dark); font-size: 0.95rem;">
-                Доставка по Китаю: <strong>{{ "%.2f"|format(order.cn_delivery_price) }} ¥</strong>
-              </div>
-            {% endif %}
           </div>
           {% endfor %}
         </div><!-- /.order-items -->

@@ -188,6 +188,7 @@ class Database:
                     total_price REAL,
                     our_tracking_number TEXT,
                     china_tracking_number TEXT,
+                    cn_delivery_price REAL,
                     warehouse_location TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP,
@@ -196,11 +197,7 @@ class Database:
                 )
             ''')
 
-
-            
-    
     # ============== User Methods ==============
-    
     def create_user(self, name, password, region, photo_path='static/default.png', is_admin=False):
         hashed_pw = generate_password_hash(password)
         with self.get_cursor() as cursor:
@@ -372,6 +369,7 @@ class Database:
             except Exception as e:
                 print(f"Error creating replenishment: {str(e)}")
                 raise        
+            
     def get_pending_replenishments(self):
         """Получает все ожидающие заявки на пополнение"""
         with self.get_cursor() as cursor:
@@ -822,6 +820,7 @@ class Database:
                         orders.total_price,
                         orders.our_tracking_number,
                         orders.china_tracking_number,
+                        orders.cn_delivery_price,
                         orders.warehouse_location,
                         orders.created_at,
                         orders.additional_services
@@ -854,7 +853,6 @@ class Database:
                     orders_list.append(order_dict)
 
 
-                print(orders_list)
                 return orders_list
                 
             except sqlite3.Error as e:
@@ -876,4 +874,20 @@ class Database:
 
         except Exception as e:
             return {'success': False, 'error': str(e)}
+        
+    def update_cn_delivery_price(self, order_id, price):
+            try:
+                with self.get_cursor() as cursor:
+                    cursor.execute(
+                        '''
+                        UPDATE orders
+                        SET cn_delivery_price = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        ''',
+                        (price  , order_id)
+                    )
+                return True
+
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
 

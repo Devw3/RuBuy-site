@@ -844,6 +844,7 @@ def profile_orders():
                 o.model_id,
                 o.quantity,
                 o.status,
+                o.cn_delivery_price,
                 m.image_url,
                 m.color_name    AS color,
                 m.size_name     AS size,
@@ -867,6 +868,7 @@ def profile_orders():
                 'created_at': r['order_date'],
                 'our_tracking_number': r['our_tracking_number'],
                 'total_price': r['total_price'],
+                'cn_delivery_price': r['cn_delivery_price'],
                 'items': []
             }
             orders.append(current)
@@ -901,6 +903,19 @@ def update_status(order_id):
         # на всякий случай — общая ошибка
         return jsonify({'success': False, 'error': 'Unknown error'}), 500
     
+@app.route('/api/orders/<int:order_id>/cn_delivery_price', methods=['POST'])
+@admin_required
+def update_china_price(order_id):
+    data = request.get_json() or {}
+    price = data.get('cn_delivery_price')
+    result = db.update_cn_delivery_price(order_id, price)
+    if result is True:
+        return jsonify({'success': True}), 200
+    else:
+        if isinstance(result, dict):
+            return jsonify(result), 500
+        return jsonify({'success': False, 'error': 'Unknown error'}), 500
+
 if __name__ == '__main__':
     with app.app_context():
         db.init_db()

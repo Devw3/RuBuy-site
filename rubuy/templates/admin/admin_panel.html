@@ -586,7 +586,7 @@
                         >
                     </div>
                     <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
-                        <button class="btn-save-status" data-order-id="{{ order.id }}">Сохранить</button>
+                        <button class="btn-save-cn-price" data-order-id="{{ order.id }}">Сохранить</button>
                     </div>
                 </td>
                 </tr>
@@ -819,26 +819,49 @@
 
             // --- Обработчик сохранения статуса заказа ---
             document.querySelectorAll('.btn-save-status').forEach(btn => {
-            btn.addEventListener('click', async () => {
+                btn.addEventListener('click', async () => {
+                    const orderId = btn.dataset.orderId;
+                    const select = document.querySelector(`.status-select[data-order-id="${orderId}"]`);
+                    const newStatus = select.value;
+
+                    try {
+                    const resp = await fetch(`/api/orders/${orderId}/status`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: newStatus })
+                    });
+                    if (!resp.ok) throw new Error('Сервер вернул ошибку');
+                    
+                    alert('Статус успешно обновлён');
+                    // при желании тут можно автоматически убрать кнопку либо обновить строку
+                    } catch (err) {
+                    console.error(err);
+                    alert('Не удалось сохранить статус: ' + err.message);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.btn-save-cn-price').forEach(btn => {
+                btn.addEventListener('click', async () => {
                 const orderId = btn.dataset.orderId;
-                const select = document.querySelector(`.status-select[data-order-id="${orderId}"]`);
-                const newStatus = select.value;
+                const input = document.querySelector(`.cn-delivery-price-input[data-order-id="${orderId}"]`);
+                const raw = input.value.trim();
+                const price = raw === '' ? null : parseFloat(raw);
 
                 try {
-                const resp = await fetch(`/api/orders/${orderId}/status`, {
+                    const resp = await fetch(`/api/orders/${orderId}/cn_delivery_price`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: newStatus })
-                });
-                if (!resp.ok) throw new Error('Сервер вернул ошибку');
-                
-                alert('Статус успешно обновлён');
-                // при желании тут можно автоматически убрать кнопку либо обновить строку
+                    body: JSON.stringify({ cn_delivery_price: price })
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) throw new Error(data.error || 'Ошибка сервера');
+                    alert('Стоимость доставки сохранена');
                 } catch (err) {
-                console.error(err);
-                alert('Не удалось сохранить статус: ' + err.message);
+                    console.error(err);
+                    alert('Не удалось сохранить доставку: ' + err.message);
                 }
-            });
+                });
             });
 
             // Инициализация
