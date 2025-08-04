@@ -134,6 +134,21 @@
       .item-price { font-size: 12px; }
       .item-status { margin-left: 0; margin-top: 10px; align-self: flex-start; }
     }
+    .pay-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 3px 8px;
+      border-radius: 3px;
+      margin-left: 10px;
+      cursor: pointer;
+    }
+
+    .paid-status {
+      color: #28a745;
+      margin-left: 10px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -166,10 +181,18 @@
                   Цена не указана
                 {% endif %}
               </div>
-              {% if order.cn_delivery_price %}
+              {% if order.cn_delivery_price and order.cn_delivery_price > 0 %}
                 <div class="delivery-info">
                     <strong>Доставка по Китаю:</strong>
                     <span>{{ order.cn_delivery_price|float }} ¥</span>
+                    
+                    {% if not order.cn_delivery_paid %}
+                        <button class="pay-btn" onclick="payDelivery({{ order.id }})">
+                            Оплатить
+                        </button>
+                    {% else %}
+                        <span class="paid-status">✓ Оплачено</span>
+                    {% endif %}
                 </div>
               {% endif %}
             </div>
@@ -194,5 +217,31 @@
     </div>
     {% endif %}
   </div>
+  <script>
+    async function payDelivery(orderId) {
+    if (!confirm(`Оплатить доставку для заказа #${orderId}?`)) return;
+    
+    try {
+        const response = await fetch(`/pay_delivery/${orderId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(result.success);
+            location.reload();
+        } else {
+            throw new Error(result.error || 'Ошибка оплаты');
+        }
+    } catch (error) {
+        alert(error.message);
+        console.error('Payment error:', error);
+    }
+}
+  </script>
 </body>
 </html>

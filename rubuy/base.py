@@ -101,7 +101,6 @@ class Database:
                     region TEXT NOT NULL,
                     photo TEXT DEFAULT 'static/default.png',
                     is_admin BOOLEAN DEFAULT FALSE,
-                    balance_rub DECIMAL(10, 2) DEFAULT 0.0,
                     balance_cny DECIMAL(10, 2) DEFAULT 0.0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -189,6 +188,7 @@ class Database:
                     our_tracking_number TEXT,
                     china_tracking_number TEXT,
                     cn_delivery_price REAL,
+                    cn_delivery_paid BOOLEAN DEFAULT FALSE,
                     warehouse_location TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP,
@@ -352,7 +352,6 @@ class Database:
             
     # заявки на пополнение
     
-
     def create_replenishment(self, user_id, amount_rub,amount_cny, payment_date, receipt_path):
         with self.get_cursor() as cursor:
             try:
@@ -401,7 +400,7 @@ class Database:
             
             # Получаем данные заявки
             cursor.execute('''
-                SELECT user_id, amount_rub, amount_cny 
+                SELECT user_id, amount_rub, amount_cny
                 FROM replenishments 
                 WHERE id = ? AND status = 'pending'
             ''', (replenishment_id,))
@@ -434,7 +433,7 @@ class Database:
             
             cursor.connection.commit()
             return True
-    # def debug_show_replenishments_table(self):
+        # def debug_show_replenishments_table(self):
     #     """Выводит всю таблицу replenishments для отладки"""
     #     with self.get_cursor() as cursor:
     #         cursor.execute('''
@@ -821,6 +820,7 @@ class Database:
                         orders.our_tracking_number,
                         orders.china_tracking_number,
                         orders.cn_delivery_price,
+                        orders.cn_delivery_paid,
                         orders.warehouse_location,
                         orders.created_at,
                         orders.additional_services

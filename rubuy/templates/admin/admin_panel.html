@@ -555,7 +555,7 @@
                                 </li>
                                 {% endfor %}
                             </ul>
-                        </div>
+                        </div>  
                     {% endif %}
                     </div>
 
@@ -588,10 +588,29 @@
                     <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
                         <button class="btn-save-cn-price" data-order-id="{{ order.id }}">Сохранить</button>
                     </div>
+                    <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
+                        <strong>Статус оплаты доставки:</strong>
+                        {% if order.cn_delivery_paid %}
+                            <span style="color: green; font-weight: bold;">Оплачено</span>
+                            <span>({{ "%.2f"|format(order.cn_delivery_price) }} ¥)</span>
+                        {% else %}
+                            {% if order.cn_delivery_price and order.cn_delivery_price > 0 %}
+                                <span style="color: #d9534f; font-weight: bold;">Не оплачено</span>
+                                <button class="btn-pay-delivery" 
+                                        data-order-id="{{ order.id }}"
+                                        data-price="{{ order.cn_delivery_price }}">
+                                    Оплатить {{ "%.2f"|format(order.cn_delivery_price) }} ¥
+                                </button>
+                            {% else %}
+                                <span>Ожидает расчета стоимости</span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
                 </td>
                 </tr>
                 {% else %}
                 <tr><td colspan="7" class="no-data">Нет заказов</td></tr>
+                
                 {% endfor %}
             </tbody>
             </table>

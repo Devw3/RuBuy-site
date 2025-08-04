@@ -205,7 +205,6 @@ def admin_panel():
         withdrawals=pending_withdrawals,
         orders=orders
     )
-    
 
 def get_cny_to_rub_rate():
     try:
@@ -806,8 +805,9 @@ def process_payment():
                         user_id, model_id, quantity,
                         status, additional_services,
                         total_price, our_tracking_number,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, 'ordered', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        created_at, updated_at,
+                        cn_delivery_paid
+                    ) VALUES (?, ?, ?, 'ordered', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
                 ''', (
                     user_id,
                     it['model_id'],
@@ -845,6 +845,7 @@ def profile_orders():
                 o.quantity,
                 o.status,
                 o.cn_delivery_price,
+                o.cn_delivery_paid,
                 m.image_url,
                 m.color_name    AS color,
                 m.size_name     AS size,
@@ -869,6 +870,7 @@ def profile_orders():
                 'our_tracking_number': r['our_tracking_number'],
                 'total_price': r['total_price'],
                 'cn_delivery_price': r['cn_delivery_price'],
+                'cn_delivery_paid': r['cn_delivery_paid'],
                 'items': []
             }
             orders.append(current)
@@ -915,6 +917,69 @@ def update_china_price(order_id):
         if isinstance(result, dict):
             return jsonify(result), 500
         return jsonify({'success': False, 'error': 'Unknown error'}), 500
+
+@app.route('/pay_delivery/<int:order_id>', methods=['POST'])
+@login_required
+def pay_delivery(order_id):
+    user_id = session['user']['id']
+    
+    with db.get_cursor() as cursor:
+        try:
+            # 1. Получаем данные о заказе и балансе
+            cursor.execute('''
+                SELECT 
+                    o.cn_delivery_price,
+                    o.cn_delivery_paid,
+                    u.balance_cny,
+                    u.balance_rub
+                FROM orders o
+                JOIN users u ON o.user_id = u.id
+                WHERE o.id = ? AND o.user_id = ?
+            ''', (order_id, user_id))
+            data = cursor.fetchone()
+            
+            if not data:
+                return jsonify({'error': 'Заказ не найден'}), 404
+            
+            # 2. Извлекаем значения
+            price = data['cn_delivery_price']
+            is_paid = data['cn_delivery_paid']
+            balance_cny = data['balance_cny']
+            
+            # 3. Проверки перед оплатой
+            if is_paid:
+                return jsonify({'error': 'Доставка уже оплачена'}), 400
+                
+            if not price or price <= 0:
+                return jsonify({'error': 'Сумма доставки не указана'}), 400
+                
+            if balance_cny < price:
+                return jsonify({
+                    'error': f'Недостаточно средств. Нужно: {price} ¥, доступно: {balance_cny} ¥'
+                }), 400
+            
+            # 4. Конвертация и списание
+            price_rub = convert_cny_to_rub(price)
+            
+            # Обновляем балансы
+            db.update_balance_cny(user_id, -price)
+            db.update_balance_rub(user_id, -price_rub)
+            
+            # 5. Обновляем статус оплаты
+            cursor.execute(
+                "UPDATE orders SET cn_delivery_paid = 1 WHERE id = ?",
+                (order_id,)
+            )
+
+            
+            return jsonify({
+                'success': 'Оплачено',
+                'message': f'Доставка оплачена: {price} ¥',
+                'new_balance_cny': balance_cny - price,
+            })
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 
 
 if __name__ == '__main__':
     with app.app_context():
