@@ -53,12 +53,14 @@
                   </svg>
                   <span class="icon-text text-light">Заказы</span>
                 </a>
-                <div class="icon-item d-flex align-items-center p-2">
-                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
-                  </svg>
-                  <span class="icon-text text-light">Мой Склад</span>
-                </div>
+                <a href="{{ url_for('warehouse') }}">
+                  <div class="icon-item d-flex align-items-center p-2">
+                    <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+                    </svg>
+                    <span class="icon-text text-light">Мой Склад</span>
+                  </div>
+                </a>
                 <div class="icon-item d-flex align-items-center p-2">
                   <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>

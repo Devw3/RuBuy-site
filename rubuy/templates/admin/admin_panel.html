@@ -606,6 +606,44 @@
                             {% endif %}
                         {% endif %}
                     </div>
+                    <div class="photo-upload-box" data-order-id="{{ order.id }}">
+                        <h4>Фотографии товара</h4>
+                        
+                        <div style="margin-bottom: 15px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                            <p><strong>Инструкция:</strong></p>
+                            <ol style="margin-left: 20px; margin-bottom: 15px;">
+                                <li>Перейдите на <a href="https://freeimage.host/" target="_blank">FreeImage.Host</a></li>
+                                <li>Загрузите фотографии товара</li>
+                                <li>Скопируйте прямую ссылку на изображение</li>
+                                <li>Вставьте ссылку в поле ниже</li>
+                            </ol>
+                            
+                            <!-- Поле для ввода ссылки -->
+                            <div style="display: flex;">
+                                <input type="text" class="photo-url-input" 
+                                    placeholder="Вставьте ссылку на фото" 
+                                    style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px 0 0 4px;">
+                                <button class="btn-add-photo" data-order-id="{{ order.id }}"
+                                        style="padding: 8px 15px; background: #4CAF50; color: white; border: none; border-radius: 0 4px 4px 0;">
+                                    Добавить
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Список фотографий -->
+                        <div class="photo-list" data-order-id="{{ order.id }}">
+                            {% if order.photos %}
+                                {% for photo_url in order.photos %}
+                                    <div class="photo-item" data-url="{{ photo_url }}">
+                                        <img src="{{ photo_url }}" alt="Фото товара" style="max-width: 150px; max-height: 150px; margin: 5px; border: 1px solid #ddd;">
+                                        <button class="btn-remove-photo" data-url="{{ photo_url }}" data-order-id="{{ order.id }}" style="background: #ff4d4d; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer;">
+                                            ×
+                                        </button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
                 </td>
                 </tr>
                 {% else %}
@@ -882,6 +920,94 @@
                 }
                 });
             });
+
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('btn-add-photo')) {
+                    const orderId = e.target.dataset.orderId;
+                    const input = e.target.previousElementSibling;
+                    const photoUrl = input.value.trim();
+                    
+                    if (!photoUrl) {
+                        alert('Введите ссылку на фото');
+                        return;
+                    }
+                    
+                    // Проверяем, похожа ли ссылка на изображение
+                    if (!/\.(jpeg|jpg|png|gif|webp)$/i.test(photoUrl)) {
+                        alert('Пожалуйста, введите ссылку на изображение (JPEG, PNG, GIF, WebP)');
+                        return;
+                    }
+                    
+                    // Отправляем запрос на сервер
+                    fetch(`/admin/orders/${orderId}/add_photo`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ photo_url: photoUrl })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Очищаем поле ввода
+                            input.value = '';
+                            
+                            // Добавляем фото в список
+                            const photoList = document.querySelector(`.photo-list[data-order-id="${orderId}"]`);
+                            const photoItem = document.createElement('div');
+                            photoItem.className = 'photo-item';
+                            photoItem.dataset.url = photoUrl;
+                            photoItem.innerHTML = `
+                                <img src="${photoUrl}" alt="Фото товара" style="max-width: 150px; max-height: 150px; margin: 5px; border: 1px solid #ddd;">
+                                <button class="btn-remove-photo" 
+                                        data-url="${photoUrl}"
+                                        data-order-id="${orderId}"
+                                        style="background: #ff4d4d; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer;">
+                                    ×
+                                </button>
+                            `;
+                            photoList.appendChild(photoItem);
+                        } else {
+                            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        alert('Произошла ошибка при добавлении фото');
+                    });
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('btn-remove-photo')) {
+                    const photoUrl = e.target.dataset.url;
+                    const orderId = e.target.dataset.orderId;
+                    
+                    if (confirm('Удалить это фото?')) {
+                        fetch(`/admin/orders/${orderId}/remove_photo`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ photo_url: photoUrl })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Удаляем элемент из списка
+                                e.target.closest('.photo-item').remove();
+                            } else {
+                                alert('Ошибка при удалении фото');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Ошибка:', error);
+                            alert('Произошла ошибка при удалении фото');
+                        });
+                    }
+                }
+            });
+    
 
             // Инициализация
             initTabs();

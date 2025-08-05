@@ -296,13 +296,28 @@
       z-index: 10001;
     }
 
-    .back-button {
-      color: var(--primary-red);
-      text-decoration: none;
-      display: inline-block;
-      margin-bottom: 20px;
-      font-weight: bold;
-    }
+    .confirum_warehouse {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #e53935; /* Красный */
+        color: white;
+        text-align: center;
+        padding: 12px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border: none;
+        z-index: 1000;
+        cursor: pointer;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+        transition: background-color 0.3s ease;
+        }
+
+        .confirum_warehouse:hover {
+        background-color: #c62828;
+        }
+
     
     /* Анимации */
     @keyframes fadeIn {
@@ -316,10 +331,8 @@
   </style>
 </head>
 <body>
-  <a href="{{url_for('profile')}}" class="back-button">← Назад к балансу</a>
-
   <div class="container">
-    <h1>Мои заказы</h1>
+    <h1>Мой склад</h1>
 
     {% if orders %}
       <div class="orders-list">
@@ -331,8 +344,10 @@
             </div>
 
             <div class="order-items">
-              {% for item in order['items'] %}
+            {% for item in order['items'] if item.status == 'in_warehouse' %}
                 <div class="order-item">
+                    <input type="checkbox" name="selected_items" value="{{ order.id }}_{{ loop.index0 }}" style="margin-right: 10px;">
+
                   <img src="{{ item.image_url or '' }}" alt="{{ item.product_title or '' }}" class="item-image">
                   
                   <div class="item-details">
@@ -416,7 +431,11 @@
     <img class="modal-content" id="modalPhoto">
     <div class="image-counter" id="imageCounter"></div>
   </div>
-  
+
+    <form id="warehouseForm" method="POST" action="/process_warehouse_selection">
+        <button type="submit" class="confirum_warehouse" style="margin: auto;">Перейти к оформлению поссылки</button>
+    </form>
+    
   <script>
     let currentPhotoIndex = 0;
     let currentPhotos = [];

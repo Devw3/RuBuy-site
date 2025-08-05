@@ -102,6 +102,7 @@ class Database:
                     photo TEXT DEFAULT 'static/default.png',
                     is_admin BOOLEAN DEFAULT FALSE,
                     balance_cny DECIMAL(10, 2) DEFAULT 0.0,
+                    balance_rub DECIMAL(10, 2) DEFAULT 0.0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -189,6 +190,7 @@ class Database:
                     china_tracking_number TEXT,
                     cn_delivery_price REAL,
                     cn_delivery_paid BOOLEAN DEFAULT FALSE,
+                    photos TEXT DEFAULT '[]',
                     warehouse_location TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP,
@@ -821,6 +823,7 @@ class Database:
                         orders.china_tracking_number,
                         orders.cn_delivery_price,
                         orders.cn_delivery_paid,
+                        orders.photos,
                         orders.warehouse_location,
                         orders.created_at,
                         orders.additional_services
@@ -834,7 +837,6 @@ class Database:
                 orders = cursor.fetchall()
                 columns = [column[0] for column in cursor.description]
                 orders_list = []
-                
                 for row in orders:
                     order_dict = dict(zip(columns, row))
                     
@@ -849,6 +851,18 @@ class Database:
                             order_dict['additional_services_list'] = []
                     else:
                         order_dict['additional_services_list'] = []
+                    
+                    photos = order_dict['photos']
+                    if photos:
+                        try:
+                            photos_str = photos.strip('"\'')
+                            photos_list = json.loads(photos_str)
+                            order_dict['photos'] = photos_list
+                        except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                            print(f"Ошибка при парсинге photos: {e}")
+                            order_dict['photos'] = []
+                    else:
+                        order_dict['photos'] = []
                     
                     orders_list.append(order_dict)
 

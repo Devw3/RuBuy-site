@@ -833,7 +833,6 @@ def process_payment():
 @login_required
 def profile_orders():
     user_id = session['user']['id']
-    # 1) Забираем все данные
     with db.get_cursor() as cursor:
         cursor.execute('''
             SELECT 
@@ -846,6 +845,7 @@ def profile_orders():
                 o.status,
                 o.cn_delivery_price,
                 o.cn_delivery_paid,
+                o.photos,
                 m.image_url,
                 m.color_name    AS color,
                 m.size_name     AS size,
@@ -859,7 +859,6 @@ def profile_orders():
         ''', (user_id,))
         rows = [dict(r) for r in cursor.fetchall()]
 
-    # 2) Группируем по order_id
     orders = []
     current = None
     for r in rows:
@@ -874,6 +873,18 @@ def profile_orders():
                 'items': []
             }
             orders.append(current)
+        
+        # Парсим photos из JSON-строки
+        photos = []
+        if r['photos']:
+            try:
+                # Удаляем лишние кавычки и пробелы, пробуем распарсить JSON
+                photos_str = r['photos'].strip('"\'')
+                photos = json.loads(photos_str) if photos_str else []
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                # Если не получается распарсить, создаём массив из строки
+                photos = [r['photos']] if isinstance(r['photos'], str) else []
+        
         current['items'].append({
             'product_title': r['product_title'],
             'image_url': r['image_url'],
@@ -881,11 +892,80 @@ def profile_orders():
             'size': r['size'],
             'price': r['unit_price'],
             'quantity': r['quantity'],
-            'status': r['status']
+            'status': r['status'],
+            'photos': [url.split(' ')[0] for url in photos]
         })
 
-    # 3) Рендерим с контекстом
     return render_template('profile/orders.html', orders=orders)
+
+@app.route('/profile/warehouse')
+@login_required
+def warehouse():
+    user_id = session['user']['id']
+    with db.get_cursor() as cursor:
+        cursor.execute('''
+            SELECT 
+                o.id            AS order_id,
+                o.created_at    AS order_date,
+                o.our_tracking_number,
+                o.total_price,
+                o.model_id,
+                o.quantity,
+                o.status,
+                o.cn_delivery_price,
+                o.cn_delivery_paid,
+                o.photos,
+                m.image_url,
+                m.color_name    AS color,
+                m.size_name     AS size,
+                m.price         AS unit_price,
+                p.title         AS product_title
+            FROM orders o
+            JOIN models m ON o.model_id = m.id
+            JOIN products p ON m.product_id = p.id
+            WHERE o.user_id = ?
+            ORDER BY o.created_at DESC, o.id, o.model_id
+        ''', (user_id,))
+        rows = [dict(r) for r in cursor.fetchall()]
+
+    orders = []
+    current = None
+    for r in rows:
+        if current is None or current['id'] != r['order_id']:
+            current = {
+                'id': r['order_id'],
+                'created_at': r['order_date'],
+                'our_tracking_number': r['our_tracking_number'],
+                'total_price': r['total_price'],
+                'cn_delivery_price': r['cn_delivery_price'],
+                'cn_delivery_paid': r['cn_delivery_paid'],
+                'items': []
+            }
+            orders.append(current)
+        
+        # Парсим photos из JSON-строки
+        photos = []
+        if r['photos']:
+            try:
+                # Удаляем лишние кавычки и пробелы, пробуем распарсить JSON
+                photos_str = r['photos'].strip('"\'')
+                photos = json.loads(photos_str) if photos_str else []
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                # Если не получается распарсить, создаём массив из строки
+                photos = [r['photos']] if isinstance(r['photos'], str) else []
+        
+        current['items'].append({
+            'product_title': r['product_title'],
+            'image_url': r['image_url'],
+            'color': r['color'],
+            'size': r['size'],
+            'price': r['unit_price'],
+            'quantity': r['quantity'],
+            'status': r['status'],
+            'photos': [url.split(' ')[0] for url in photos]
+        })
+
+    return render_template('profile/my_warehouse.html', orders=orders)
     
 @app.route('/api/orders/<int:order_id>/status', methods=['POST'])
 @admin_required 
@@ -979,7 +1059,81 @@ def pay_delivery(order_id):
             })
             
         except Exception as e:
-            return jsonify({'error': str(e)}), 
+            return jsonify({'error': str(e)}), 500
+        
+@app.route('/admin/orders/<int:order_id>/add_photo', methods=['POST'])
+@admin_required
+def add_photo(order_id):
+    try:
+        data = request.json
+        photo_url = data.get('photo_url')
+        
+        if not photo_url:
+            return jsonify(success=False, error='Не указана ссылка на фото'), 400
+        
+        with db.get_cursor() as cursor:
+            # Получаем текущие фото
+            cursor.execute("SELECT photos FROM orders WHERE id = ?", (order_id,))
+            row = cursor.fetchone()
+            current_photos = json.loads(row['photos']) if row and row['photos'] else []
+            
+            # Проверяем, нет ли уже такой ссылки
+            if photo_url in current_photos:
+                return jsonify(success=False, error='Фото уже добавлено'), 400
+                
+            # Добавляем новую ссылку
+            current_photos.append(photo_url)
+            
+            # Обновляем запись
+            cursor.execute(
+                "UPDATE orders SET photos = ? WHERE id = ?",
+                (json.dumps(current_photos), order_id)
+            )
+        
+        return jsonify(success=True)
+    
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
+
+@app.route('/admin/orders/<int:order_id>/remove_photo', methods=['POST'])
+@admin_required
+def remove_photo(order_id):
+    try:
+        data = request.json
+        photo_url = data.get('photo_url')
+        
+        if not photo_url:
+            return jsonify(success=False, error='Не указана ссылка на фото'), 400
+        
+        with db.get_cursor() as cursor:
+            # Получаем текущие фото
+            cursor.execute("SELECT photos FROM orders WHERE id = ?", (order_id,))
+            row = cursor.fetchone()
+            
+            if not row or not row['photos']:
+                return jsonify(success=False, error='Фото не найдены'), 404
+                
+            current_photos = json.loads(row['photos'])
+            
+            # Проверяем, есть ли такая ссылка
+            if photo_url not in current_photos:
+                return jsonify(success=False, error='Фото не найдено'), 404
+                
+            # Удаляем ссылку
+            current_photos.remove(photo_url)
+            
+            # Обновляем запись
+            cursor.execute(
+                "UPDATE orders SET photos = ? WHERE id = ?",
+                (json.dumps(current_photos), order_id)
+            )
+        
+        return jsonify(success=True)
+    
+    except Exception as e:
+        return jsonify(success=False, error=str(e)), 500
+    
+
 
 if __name__ == '__main__':
     with app.app_context():
