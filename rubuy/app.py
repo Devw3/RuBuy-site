@@ -1133,7 +1133,35 @@ def remove_photo(order_id):
     except Exception as e:
         return jsonify(success=False, error=str(e)), 500
     
+@app.route('/profile/warehouse_order', methods=['POST'])
+@login_required
+def warehouse_order():
+    selected = request.form.getlist('selected_items')
+    print("Выбранные товары:", selected)
+    if not selected:
+        flash('Выберите хотя бы один товар', 'warning')
+        return redirect(url_for('warehouse'))  # или куда нужно
 
+    user_id = session['user']['id']
+
+    order_ids = list({int(value.split('_')[0]) for value in selected})
+    print(order_ids)
+
+    warehouse_items = db.get_orders_by_ids(user_id, order_ids)
+    print("Товары на складе:", warehouse_items)
+
+    if not warehouse_items:
+        flash('Выбранные товары не найдены', 'danger')
+        return redirect(url_for('warehouse'))
+
+    # # Общая сумма
+    # total = sum(item['price'] * item['quantity'] for item in warehouse_items)
+    # balance = db.get_balance(user_id)['cny']
+
+    return render_template(
+        'profile/my_warehouse_order.html',
+        warehouse_items=warehouse_items,
+)
 
 if __name__ == '__main__':
     with app.app_context():

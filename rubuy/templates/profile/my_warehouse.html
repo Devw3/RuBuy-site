@@ -27,7 +27,7 @@
       color: var(--text-light);
       margin: 0;
       padding: 20px;
-      min-height: 100vh;
+      min-height: 140vh;
     }
     .container {
       max-width: 1200px;
@@ -297,28 +297,34 @@
     }
 
     .confirum_warehouse {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        background-color: #e53935; /* Красный */
-        color: white;
-        text-align: center;
-        padding: 12px;
-        font-size: 1.2rem;
-        font-weight: bold;
-        border: none;
-        z-index: 1000;
-        cursor: pointer;
-        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
-        transition: background-color 0.3s ease;
-        }
+      display: flex;
+      justify-content: center;
+      align-items: center;  
+      margin: auto;
+      margin-top: 50px;
+      background-color: #e53935;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 15px 20px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s ease;
+    }
 
-        .confirum_warehouse:hover {
-        background-color: #c62828;
-        }
+    .confirum_warehouse:hover {
+      background-color: #c62828; 
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
 
-    
+    .confirum_warehouse:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
     /* Анимации */
     @keyframes fadeIn {
       from { opacity: 0; }
@@ -328,25 +334,40 @@
     .modal {
       animation: fadeIn 0.3s;
     }
+
+    .back-button {
+      color: var(--primary-red);
+      text-decoration: none;
+      display: inline-block;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <a href="{{url_for('profile')}}" class="back-button">← Назад к балансу</a>
+
     <h1>Мой склад</h1>
 
     {% if orders %}
-      <div class="orders-list">
-        {% for order in orders %}
-          <div class="order">
-            <div class="order-header">
-              <span>Заказ №{{ order.id }}</span>
-              <span>{{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
-            </div>
-
-            <div class="order-items">
+      <form id="warehouseForm" method="POST" action="{{ url_for('warehouse_order') }}">
+        <div class="orders-list">
+          {% for order in orders %}
             {% for item in order['items'] if item.status == 'in_warehouse' %}
+            <div class="order">
+              <div class="order-header">
+                <span>Заказ №{{ order.id }}</span>
+                <span>{{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+              </div>
+
+              <div class="order-items">
                 <div class="order-item">
-                    <input type="checkbox" name="selected_items" value="{{ order.id }}_{{ loop.index0 }}" style="margin-right: 10px;">
+                  <!-- Чекбокс с именем selected_items и значением order_id + индекс -->
+                  <input type="checkbox"
+                        name="selected_items"
+                        value="{{ order.id }}_{{ loop.index0 }}"
+                        style="margin-right: 10px;">
 
                   <img src="{{ item.image_url or '' }}" alt="{{ item.product_title or '' }}" class="item-image">
                   
@@ -363,22 +384,20 @@
                         Цена не указана
                       {% endif %}
                     </div>
+
                     {% if order.cn_delivery_price and order.cn_delivery_price > 0 %}
-                      <div class="delivery-info">
-                        <strong>Доставка по Китаю:</strong>
-                        <span>{{ order.cn_delivery_price|float }} ¥</span>
-                        
-                        {% if not order.cn_delivery_paid %}
-                          <button class="pay-btn" onclick="payDelivery({{ order.id }})">
-                            Оплатить
-                          </button>
-                        {% else %}
-                          <span class="paid-status">✓ Оплачено</span>
-                        {% endif %}
-                      </div>
+                    <div class="delivery-info">
+                      <strong>Доставка по Китаю:</strong>
+                      <span>{{ order.cn_delivery_price|float }} ¥</span>
+                      {% if not order.cn_delivery_paid %}
+                        <button class="pay-btn" onclick="payDelivery({{ order.id }})">Оплатить</button>
+                      {% else %}
+                        <span class="paid-status">✓ Оплачено</span>
+                      {% endif %}
+                    </div>
                     {% endif %}
                   </div>
-                  
+
                   <div class="item-status status-{{ item.status or order.status }}">
                     {% if item.status == 'ordered' %}Заказан{% endif %}
                     {% if item.status == 'processing' %}В обработке{% endif %}
@@ -388,31 +407,36 @@
                     {% if item.status == 'in_warehouse' %}На складе{% endif %}
                   </div>
                 </div><!-- /.order-item -->
-                
+
                 {% if item.photos and item.photos|length > 0 %}
-                  <div class="admin-photos">
-                    <div class="photos-label">
-                      <i class="fas fa-camera"></i>
-                      Фото с проверки ({{ item.photos|length }})
+                <div class="admin-photos">
+                  <div class="photos-label">
+                    <i class="fas fa-camera"></i>
+                    Фото с проверки ({{ item.photos|length }})
+                  </div>
+                  <div class="photos-grid">
+                    {% for photo_url in item.photos %}
+                    <div class="photo-item"
+                        onclick="openPhotoModal({{ photo_url|tojson|safe }}, {{ item.photos|tojson|safe }}, {{ loop.index0 }})">
+                      <img src="{{ photo_url }}" alt="Фото проверки" onerror="this.src='https://via.placeholder.com/100'">
+                      {% if loop.index > 1 %}
+                      <div class="photo-count">+{{ loop.length - 1 }}</div>
+                      {% endif %}
                     </div>
-                    <div class="photos-grid">
-                      {% for photo_url in item.photos %}
-                        <div class="photo-item" 
-                            onclick="openPhotoModal({{ photo_url|tojson|safe }}, {{ item.photos|tojson|safe }}, {{ loop.index0 }})">
-                            <img src="{{ photo_url }}" alt="Фото проверки" onerror="this.src='https://via.placeholder.com/100'">
-                            {% if loop.index > 1 %}
-                                <div class="photo-count">+{{ loop.length - 1 }}</div>
-                            {% endif %}
-                        </div>
-                      {% endfor %}
-                    </div>
-                  </div><!-- /.admin-photos -->
+                    {% endfor %}
+                  </div>
+                </div>
                 {% endif %}
-              {% endfor %}
-            </div><!-- /.order-items -->
-          </div><!-- /.order -->
-        {% endfor %}
-      </div><!-- /.orders-list -->
+              </div><!-- /.order-items -->
+            </div><!-- /.order -->
+            {% endfor %}
+          {% endfor %}
+        </div><!-- /.orders-list -->
+
+        <!-- Кнопка отправки формы -->
+        <button type="submit" class="confirum_warehouse">Перейти к оформлению поссылки</button>
+      </form>
+
     {% else %}
       <div class="no-orders">
         <p>У вас пока нет заказов.</p>
@@ -431,10 +455,6 @@
     <img class="modal-content" id="modalPhoto">
     <div class="image-counter" id="imageCounter"></div>
   </div>
-
-    <form id="warehouseForm" method="POST" action="/process_warehouse_selection">
-        <button type="submit" class="confirum_warehouse" style="margin: auto;">Перейти к оформлению поссылки</button>
-    </form>
     
   <script>
     let currentPhotoIndex = 0;

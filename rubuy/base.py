@@ -905,3 +905,32 @@ class Database:
             except Exception as e:
                 return {'success': False, 'error': str(e)}
 
+    # добавить вес товара в заказ
+    def get_orders_by_ids(self, user_id, order_ids):
+        if not order_ids:
+            return []
+
+        placeholders = ','.join('?' for _ in order_ids)
+        query = f'''
+            SELECT
+                o.id                AS order_id,
+                o.quantity          AS quantity,
+                o.total_price       AS total_price,
+                -- поля из models
+                m.product_url       AS product_url,
+                m.color_name        AS color,
+                m.size_name         AS size,
+                m.price             AS unit_price,
+                m.image_url         AS image_url
+            FROM orders o
+            JOIN models m ON o.model_id = m.id
+            WHERE o.user_id = ?
+            AND o.id IN ({placeholders})
+        '''
+        params = [user_id] + order_ids
+
+        with self.get_cursor() as cursor:
+            rows = cursor.execute(query, params).fetchall()
+            cols = [col[0] for col in cursor.description]
+            # возвращаем список словарей с exactly теми ключами, что нужны в шаблоне
+            return [dict(zip(cols, row)) for row in rows]

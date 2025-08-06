@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RUBUY - Оформление отправки</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #000;
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #111;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(200, 0, 0, 0.2);
+            padding: 20px;
+            position: relative;
+            border: 1px solid #333;
+        }
+        
+        .back-btn {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: #e53935;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        
+        .back-btn:hover {
+            background: #c62828;
+            transform: translateY(-2px);
+        }
+        
+        .back-btn i {
+            margin-right: 8px;
+        }
+        
+        .shipment-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .shipment-header h1 {
+            font-size: 2rem;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+        
+        .shipment-items {
+            margin-bottom: 30px;
+        }
+        
+        .shipment-item {
+            display: flex;
+            padding: 15px;
+            border-bottom: 1px solid #333;
+            background: #1a1a1a;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .item-image {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-right: 15px;
+            border: 1px solid #333;
+        }
+        
+        .item-details {
+            flex-grow: 1;
+        }
+        
+        .item-title {
+            font-size: 1rem;
+            font-weight: bold;
+            margin-bottom: 3px;
+            color: #fff;
+        }
+        
+        .item-variants {
+            color: #aaa;
+            margin-bottom: 3px;
+            font-size: 0.85rem;
+        }
+        
+        .item-weight {
+            color: #aaa;
+            font-size: 0.85rem;
+        }
+        
+        .item-checkbox {
+            width: 20px;
+            height: 20px;
+            accent-color: #e53935;
+            margin-right: 15px;
+        }
+        
+        /* Блоки выбора доставки и упаковки */
+        .delivery-section, .packaging-section {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        
+        .section-header {
+            font-size: 1.3rem;
+            color: #e53935;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .option-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #333;
+            transition: background 0.3s;
+        }
+        
+        .option-item:hover {
+            background: #222;
+        }
+        
+        .option-radio {
+            margin-right: 15px;
+            width: 20px;
+            height: 20px;
+            accent-color: #e53935;
+        }
+        
+        .option-info {
+            flex-grow: 1;
+        }
+        
+        .option-title {
+            font-weight: bold;
+            margin-bottom: 3px;
+            color: #fff;
+        }
+        
+        .option-description {
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+        
+        .option-price {
+            color: #fdfdfd;
+            font-weight: bold;
+            min-width: 60px;
+            text-align: right;
+        }
+        
+        /* Блок с адресом */
+        .address-section {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        
+        .address-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .address-title {
+            font-size: 1.1rem;
+            color: #fff;
+            font-weight: bold;
+        }
+        
+        .change-address {
+            color: #e53935;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        
+        .address-details {
+            color: #ddd;
+            line-height: 1.5;
+        }
+        
+        .address-field {
+            margin-bottom: 5px;
+        }
+        
+        .address-name {
+            font-weight: bold;
+        }
+        
+        /* Итоговая сумма */
+        .summary {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .summary-total {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        .total-label {
+            color: #fff;
+        }
+        
+        .total-amount {
+            color: #fdfdfd;
+        }
+        
+        /* Кнопка оформления */
+        .confirm-btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: #e53935;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(229, 57, 53, 0.3);
+        }
+        
+        .confirm-btn:hover {
+            background: #c62828;
+            box-shadow: 0 6px 8px rgba(229, 57, 53, 0.4);
+        }
+        
+        .confirm-btn:disabled {
+            background: #444;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .shipment-header h1 {
+                font-size: 1.4rem;
+            }
+            
+            .section-header {
+                font-size: 1.1rem;
+            }
+            
+            .shipment-item {
+                flex-wrap: wrap;
+            }
+            
+            .item-image {
+                width: 60px;
+                height: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/profile/warehouse" class="back-btn">
+            <i class="fas fa-arrow-left"></i> Назад на склад
+        </a>
+        
+        <div class="shipment-header">
+            <h1>Оформление отправки</h1>
+            <p>Выберите товары для отправки и укажите параметры доставки</p>
+        </div>
+        
+        <!-- Блок с товарами -->
+        <div class="shipment-items">
+            {% for item in warehouse_items %}
+            <div class="shipment-item"> 
+                <input type="checkbox" class="item-checkbox" 
+                       data-item-id="{{ item.id }}" 
+                       data-weight="{{ item.weight }}"
+                       checked>
+                
+                <img src="{{ item.image_url }}" 
+                    alt="{{ item.product_title }}" 
+                    class="item-image" 
+                    referrerpolicy="no-referrer">
+                
+                <div class="item-details">
+                    <!-- <div class="item-title">{{ item.product_title }}</div> -->
+                    <div class="item-variants">
+                        Цвет: {{ item.color }}, Размер: {{ item.size }}
+                    </div>
+                    <!-- <div class="item-weight">Вес: {{ item.weight }} кг</div> -->
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+      
+        <!-- Блок с выбором способа доставки -->
+        <div class="delivery-section">
+            <h2 class="section-header">Способ доставки</h2>
+            
+            <div class="option-item">
+                <input type="radio" id="delivery-standart" 
+                       class="option-radio" name="delivery" 
+                       value="standart" checked>
+                <div class="option-info">
+                    <div class="option-title">Почта России (Стандарт)</div>
+                    <div class="option-description">Доставка 10-20 дней, отслеживание</div>
+                </div>
+                <div class="option-price">15 ¥/кг</div>
+            </div>
+            
+            <div class="option-item">
+                <input type="radio" id="delivery-express" 
+                       class="option-radio" name="delivery" 
+                       value="express">
+                <div class="option-info">
+                    <div class="option-title">Почта России (Экспресс)</div>
+                    <div class="option-description">Доставка 5-10 дней, приоритетная обработка</div>
+                </div>
+                <div class="option-price">25 ¥/кг</div>
+            </div>
+            
+            <div class="option-item">
+                <input type="radio" id="delivery-cdek" 
+                       class="option-radio" name="delivery" 
+                       value="cdek">
+                <div class="option-info">
+                    <div class="option-title">СДЭК</div>
+                    <div class="option-description">Курьерская доставка 7-14 дней</div>
+                </div>
+                <div class="option-price">30 ¥/кг</div>
+            </div>
+        </div>
+        
+        <!-- Блок с выбором упаковки -->
+        <div class="packaging-section">
+            <h2 class="section-header">Упаковка</h2>
+            
+            <div class="option-item">
+                <input type="checkbox" id="packaging-basic" 
+                       class="option-radio" name="packaging" 
+                       value="basic" checked>
+                <div class="option-info">
+                    <div class="option-title">Стандартная упаковка</div>
+                    <div class="option-description">Бесплатная защитная упаковка</div>
+                </div>
+                <div class="option-price">0 ¥</div>
+            </div>
+            
+            <div class="option-item">
+                <input type="checkbox" id="packaging-premium" 
+                       class="option-radio" name="packaging" 
+                       value="premium">
+                <div class="option-info">
+                    <div class="option-title">Премиум упаковка</div>
+                    <div class="option-description">Усиленная коробка с защитой от влаги</div>
+                </div>
+                <div class="option-price">10 ¥</div>
+            </div>
+            
+            <div class="option-item">
+                <input type="checkbox" id="packaging-gift" 
+                       class="option-radio" name="packaging" 
+                       value="gift">
+                <div class="option-info">
+                    <div class="option-title">Подарочная упаковка</div>
+                    <div class="option-description">Стильная упаковка для подарка</div>
+                </div>
+                <div class="option-price">15 ¥</div>
+            </div>
+        </div>
+        
+        <!-- Итоговая сумма -->
+        <div class="summary">
+            <div class="summary-item">
+                <span>Доставка:</span>
+                <span id="delivery-cost">0 ¥</span>
+            </div>
+            <div class="summary-item">
+                <span>Упаковка:</span>
+                <span id="packaging-cost">0 ¥</span>
+            </div>
+            <div class="summary-total">
+                <span class="total-label">Итого к оплате:</span>
+                <span class="total-amount" id="total-amount">0 ¥</span>
+            </div>
+        </div>
+        
+        <!-- Кнопка оформления отправки -->
+        <button id="confirm-btn" class="confirm-btn">
+            Оформить отправку
+        </button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Элементы страницы
+            const deliveryOptions = document.querySelectorAll('input[name="delivery"]');
+            const packagingOptions = document.querySelectorAll('input[name="packaging"]');
+            const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+            const confirmBtn = document.getElementById('confirm-btn');
+            
+            // Элементы стоимости
+            const deliveryCostEl = document.getElementById('delivery-cost');
+            const packagingCostEl = document.getElementById('packaging-cost');
+            const totalAmountEl = document.getElementById('total-amount');
+            
+            // Цены доставки
+            const deliveryPrices = {
+                'standart': 15,
+                'express': 25,
+                'cdek': 30
+            };
+            
+            // Цены упаковки
+            const packagingPrices = {
+                'basic': 0,
+                'premium': 10,
+                'gift': 15
+            };
+            
+            // Обновление стоимости
+            function updateCost() {
+                // Рассчет общего веса выбранных товаров
+                let totalWeight = 0;
+                itemCheckboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        totalWeight += parseFloat(checkbox.dataset.weight);
+                    }
+                });
+                
+                // Рассчет стоимости доставки
+                let deliveryCost = 0;
+                deliveryOptions.forEach(option => {
+                    if (option.checked) {
+                        deliveryCost = deliveryPrices[option.value] * totalWeight;
+                    }
+                });
+                
+                // Рассчет стоимости упаковки
+                let packagingCost = 0;
+                packagingOptions.forEach(option => {
+                    if (option.checked) {
+                        packagingCost += packagingPrices[option.value];
+                    }
+                });
+                
+                // Общая стоимость
+                const totalCost = deliveryCost + packagingCost;
+                
+                // Обновление значений на странице
+                deliveryCostEl.textContent = deliveryCost.toFixed(2) + ' ¥';
+                packagingCostEl.textContent = packagingCost.toFixed(2) + ' ¥';
+                totalAmountEl.textContent = totalCost.toFixed(2) + ' ¥';
+                
+                // Активация/деактивация кнопки
+                confirmBtn.disabled = totalWeight === 0;
+            }
+            
+            // Обработчики событий
+            deliveryOptions.forEach(option => {
+                option.addEventListener('change', updateCost);
+            });
+            
+            packagingOptions.forEach(option => {
+                option.addEventListener('change', updateCost);
+            });
+            
+            itemCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateCost);
+            });
+            
+            // Обработка оформления отправки
+            confirmBtn.addEventListener('click', function() {
+                // Сбор выбранных товаров
+                const selectedItems = [];
+                itemCheckboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        selectedItems.push(checkbox.dataset.itemId);
+                    }
+                });
+                
+                // Проверка выбора товаров
+                if (selectedItems.length === 0) {
+                    alert('Выберите хотя бы один товар для отправки');
+                    return;
+                }
+                
+                // Получение выбранного способа доставки
+                let selectedDelivery = '';
+                deliveryOptions.forEach(option => {
+                    if (option.checked) {
+                        selectedDelivery = option.value;
+                    }
+                });
+                
+                // Сбор выбранных опций упаковки
+                const selectedPackaging = [];
+                packagingOptions.forEach(option => {
+                    if (option.checked && option.value !== 'basic') {
+                        selectedPackaging.push(option.value);
+                    }
+                });
+                
+                // Показ загрузки
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Оформление...';
+                
+                // Отправка данных на сервер
+                fetch('/process-shipment', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        items: selectedItems,
+                        delivery: selectedDelivery,
+                        packaging: selectedPackaging
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Отправка успешно оформлена!');
+                        window.location.href = '/profile/orders';
+                    } else {
+                        alert('Ошибка: ' + (data.error || 'Попробуйте снова'));
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'Оформить отправку';
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    alert('Произошла ошибка при оформлении отправки');
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Оформить отправку';
+                });
+            });
+            
+            // Инициализация стоимости
+            updateCost();
+        });
+    </script>
+</body>
+</html>
