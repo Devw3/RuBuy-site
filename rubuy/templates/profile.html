@@ -40,7 +40,7 @@
               <div class="profile_counts d-flex mb-2">
                 <div class="wallet-amount display-5 text-light">
                   <a href="{{ url_for('balance') }}" class="text-light text-decoration-none">
-                      {{ balance_cny }} ¥ 
+                      {{ balance_cny|round(2) }} ¥
                   </a>
                 </div>
               </div>

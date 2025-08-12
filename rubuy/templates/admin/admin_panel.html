@@ -553,7 +553,7 @@
                                     {% if svc == 'video' %}Видеоотчёт{% endif %}
                                     {% if svc == 'inspection' %}Тчательная проверка{% endif %}
                                 </li>
-                                {% endfor %}
+                                {% endfor %}    
                             </ul>
                         </div>  
                     {% endif %}
@@ -588,6 +588,34 @@
                     <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
                         <button class="btn-save-cn-price" data-order-id="{{ order.id }}">Сохранить</button>
                     </div>
+
+                    <!-- После блока стоимости доставки по Китаю -->
+                    <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
+                        <strong>Вес товара (кг):</strong>
+                        <input 
+                            type="number" 
+                            class="weight-input" 
+                            data-order-id="{{ order.id }}"
+                            min="0" 
+                            step="0.01" 
+                            placeholder="0.00"
+                            value="{{ order.weight or '' }}"
+                            style="width: 100px;"
+                        >
+                    </div>
+                    <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
+                        <button class="btn-save-weight" data-order-id="{{ order.id }}">Сохранить вес</button>
+                    </div>
+
+                    <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
+                        <strong>Вес товара:</strong>
+                        {% if order.weight %}
+                            <span>{{ "%.2f"|format(order.weight) }} кг</span>
+                        {% else %}
+                            <span style="color: #d9534f;">Не указан</span>
+                        {% endif %}
+                    </div>
+
                     <div class="detail-item" style="grid-column: span 2; margin-top: 10px;">
                         <strong>Статус оплаты доставки:</strong>
                         {% if order.cn_delivery_paid %}
@@ -920,6 +948,30 @@
                 }
                 });
             });
+
+            // Обработчик сохранения веса
+            document.querySelectorAll('.btn-save-weight').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const orderId = btn.dataset.orderId;
+                    const input = document.querySelector(`.weight-input[data-order-id="${orderId}"]`);
+                    const raw = input.value.trim();
+                    const weight = raw === '' ? null : parseFloat(raw);
+
+                    try {
+                        const resp = await fetch(`/api/orders/${orderId}/weight`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ weight: weight })
+                        });
+                        const data = await resp.json();
+                        if (!resp.ok) throw new Error(data.error || 'Ошибка сервера');
+                        alert('Вес товара сохранен');
+                    } catch (err) {
+                        console.error(err);
+                        alert('Не удалось сохранить вес: ' + err.message);
+                    }
+                });
+});
 
             document.addEventListener('click', function(e) {
                 if (e.target.classList.contains('btn-add-photo')) {

@@ -997,6 +997,20 @@ def update_china_price(order_id):
         if isinstance(result, dict):
             return jsonify(result), 500
         return jsonify({'success': False, 'error': 'Unknown error'}), 500
+    
+@app.route('/api/orders/<int:order_id>/weight', methods=['POST'])
+@admin_required
+def update_order_weight(order_id):
+    data = request.get_json()
+    weight = data.get('weight')
+    
+    result = db.update_order_weight(order_id, weight)
+    if result is True:
+        return jsonify({'success': True}), 200
+    else:
+        if isinstance(result, dict):
+            return jsonify(result), 500
+        return jsonify({'success': False, 'error': 'Unknown error'}), 500
 
 @app.route('/pay_delivery/<int:order_id>', methods=['POST'])
 @login_required
@@ -1155,8 +1169,7 @@ def warehouse_order():
         return redirect(url_for('warehouse'))
 
     # # Общая сумма
-    # total = sum(item['price'] * item['quantity'] for item in warehouse_items)
-    # balance = db.get_balance(user_id)['cny']
+    unit_prices = sum(item['unit_price'] * item['quantity'] for item in warehouse_items)    
 
     return render_template(
         'profile/my_warehouse_order.html',

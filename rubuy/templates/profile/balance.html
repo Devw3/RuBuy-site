@@ -249,7 +249,7 @@
     <a href="{{url_for('profile')}}" class="back-button">← Профиль</a>
 
     <header>
-        <div class="balance-header">{{ balance_cny }} ¥ ( {{ balance_rub }} P)</div>
+        <div class="balance-header">{{ balance_cny|round(2) }} ¥ ( {{ balance_rub|round(2) }} P)</div>
         <div class="actions">
                 <a href="{{ url_for('replenishment') }}" class="btn btn-topup">Пополнить</a>
                 <a href="{{ url_for('withdraw') }}" class="btn btn-withdraw">Вывести</a>

@@ -191,6 +191,7 @@ class Database:
                     cn_delivery_price REAL,
                     cn_delivery_paid BOOLEAN DEFAULT FALSE,
                     photos TEXT DEFAULT '[]',
+                    weight REAL,
                     warehouse_location TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP,
@@ -904,6 +905,22 @@ class Database:
 
             except Exception as e:
                 return {'success': False, 'error': str(e)}
+            
+    def update_order_weight(self, order_id, weight):
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(
+                    '''
+                    UPDATE orders
+                    SET weight = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    ''',
+                    (weight  , order_id)
+                )
+            return True
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
 
     # добавить вес товара в заказ
     def get_orders_by_ids(self, user_id, order_ids):
@@ -916,7 +933,7 @@ class Database:
                 o.id                AS order_id,
                 o.quantity          AS quantity,
                 o.total_price       AS total_price,
-                -- поля из models
+                o.weight            AS weight,
                 m.product_url       AS product_url,
                 m.color_name        AS color,
                 m.size_name         AS size,
@@ -932,5 +949,4 @@ class Database:
         with self.get_cursor() as cursor:
             rows = cursor.execute(query, params).fetchall()
             cols = [col[0] for col in cursor.description]
-            # возвращаем список словарей с exactly теми ключами, что нужны в шаблоне
             return [dict(zip(cols, row)) for row in rows]

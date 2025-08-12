@@ -274,6 +274,50 @@
             cursor: not-allowed;
             box-shadow: none;
         }
+        .form-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #d2d2d2;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: #201e1e;
+            color: #d2d2d2;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+        }
+
+        .form-hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 13px;
+            color: #666;
+        }
+
+
         
         /* Адаптивность */
         @media (max-width: 768px) {
@@ -293,6 +337,10 @@
                 width: 60px;
                 height: 60px;
             }
+            form-section {
+            padding: 15px;
+            }
+                
         }
     </style>
 </head>
@@ -326,7 +374,7 @@
                     <div class="item-variants">
                         Цвет: {{ item.color }}, Размер: {{ item.size }}
                     </div>
-                    <!-- <div class="item-weight">Вес: {{ item.weight }} кг</div> -->
+                    <div class="item-weight">Вес: {{ item.weight }} кг</div>
                 </div>
             </div>
             {% endfor %}
@@ -338,74 +386,103 @@
             <h2 class="section-header">Способ доставки</h2>
             
             <div class="option-item">
-                <input type="radio" id="delivery-standart" 
-                       class="option-radio" name="delivery" 
-                       value="standart" checked>
+                <input type="radio" id="delivery_air_fast" 
+                    class="option-radio" name="delivery" 
+                    value="air_fast" data-rate="35" data-min="1" checked>
                 <div class="option-info">
-                    <div class="option-title">Почта России (Стандарт)</div>
-                    <div class="option-description">Доставка 10-20 дней, отслеживание</div>
+                    <div class="option-title">Авиа 3-5 дней</div>
+                    <div class="option-description">от 1 кг</div>
                 </div>
-                <div class="option-price">15 ¥/кг</div>
+                <div class="option-price">35 $ за кг</div>
             </div>
             
             <div class="option-item">
-                <input type="radio" id="delivery-express" 
-                       class="option-radio" name="delivery" 
-                       value="express">
+                <input type="radio" id="delivery_air_slow" 
+                    class="option-radio" name="delivery" 
+                    value="air_slow" data-rate="8" data-min="10">
                 <div class="option-info">
-                    <div class="option-title">Почта России (Экспресс)</div>
-                    <div class="option-description">Доставка 5-10 дней, приоритетная обработка</div>
+                    <div class="option-title">Авиа 9-13 дней</div>
+                    <div class="option-description">от 10 кг</div>
                 </div>
-                <div class="option-price">25 ¥/кг</div>
+                <div class="option-price">8 $ за кг</div>
             </div>
             
             <div class="option-item">
-                <input type="radio" id="delivery-cdek" 
-                       class="option-radio" name="delivery" 
-                       value="cdek">
+                <input type="radio" id="delivery_auto_fast" 
+                    class="option-radio" name="delivery" 
+                    value="auto_fast" data-rate="7" data-min="1">
                 <div class="option-info">
-                    <div class="option-title">СДЭК</div>
-                    <div class="option-description">Курьерская доставка 7-14 дней</div>
+                    <div class="option-title">Авто 12-15 дней</div>
+                    <div class="option-description">от 1 кг</div>
                 </div>
-                <div class="option-price">30 ¥/кг</div>
+                <div class="option-price">7 $ за кг</div>
             </div>
         </div>
-        
+
         <!-- Блок с выбором упаковки -->
         <div class="packaging-section">
             <h2 class="section-header">Упаковка</h2>
             
             <div class="option-item">
-                <input type="checkbox" id="packaging-basic" 
-                       class="option-radio" name="packaging" 
-                       value="basic" checked>
+                <input type="radio" id="packaging-basic" 
+                    class="option-radio" name="packaging" 
+                    value="basic" checked>
                 <div class="option-info">
                     <div class="option-title">Стандартная упаковка</div>
-                    <div class="option-description">Бесплатная защитная упаковка</div>
                 </div>
-                <div class="option-price">0 ¥</div>
             </div>
             
             <div class="option-item">
-                <input type="checkbox" id="packaging-premium" 
-                       class="option-radio" name="packaging" 
-                       value="premium">
+                <input type="radio" id="packaging-latginh" 
+                    class="option-radio" name="packaging" 
+                    value="latginh">
                 <div class="option-info">
-                    <div class="option-title">Премиум упаковка</div>
-                    <div class="option-description">Усиленная коробка с защитой от влаги</div>
+                    <div class="option-title">Обрешётка</div>
                 </div>
-                <div class="option-price">10 ¥</div>
             </div>
             
             <div class="option-item">
-                <input type="checkbox" id="packaging-gift" 
-                       class="option-radio" name="packaging" 
-                       value="gift">
+                <input type="radio" id="packaging-pallet" 
+                    class="option-radio" name="packaging" 
+                    value="pallet">
                 <div class="option-info">
-                    <div class="option-title">Подарочная упаковка</div>
-                    <div class="option-description">Стильная упаковка для подарка</div>
+                    <div class="option-title">Деревянные поддоны</div>
                 </div>
-                <div class="option-price">15 ¥</div>
+            </div>
+
+            <div class="option-item">
+                <input type="radio" id="packaging-box" 
+                    class="option-radio" name="packaging" 
+                    value="box">
+                <div class="option-info">
+                    <div class="option-title">Деревянный ящик</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2 class="section-header">Данные получателя</h2>
+            
+            <div class="form-group">
+                <label for="fullname">ФИО получателя</label>
+                <input type="text" id="fullname" name="fullname" required placeholder="Иванов Иван Иванович">
+            </div>
+            
+            <div class="form-group">
+                <label for="phone">Номер телефона</label>
+                <input type="tel" id="phone" name="phone" required placeholder="+7 (999) 123-45-67">
+            </div>
+            
+            <div class="form-group">
+                <label for="city">Город</label>
+                <input type="text" id="city" name="city" required placeholder="Москва">
+            </div>
+            
+            <div class="form-group">
+                <label for="address">Адрес доставки</label>
+                <input type="text" id="address" name="address" required 
+                    placeholder="Для СДЭК/Яндекс Доставки/ПЭК">
+                <small class="form-hint">Укажите адрес пункта выдачи</small>
             </div>
         </div>
         
@@ -421,7 +498,7 @@
             </div>
             <div class="summary-total">
                 <span class="total-label">Итого к оплате:</span>
-                <span class="total-amount" id="total-amount">0 ¥</span>
+                <span class="total-amount" id="total-amount"></span>
             </div>
         </div>
         
@@ -443,6 +520,51 @@
             const deliveryCostEl = document.getElementById('delivery-cost');
             const packagingCostEl = document.getElementById('packaging-cost');
             const totalAmountEl = document.getElementById('total-amount');
+            const weightInput = document.getElementById('weight');
+            const deliveryRadios = document.querySelectorAll('input[name="delivery"]');
+            const resultDiv = document.getElementById('result');
+
+            function updateOptions() {
+                const w = parseFloat(weightInput.value);
+                const totalW = isNaN(w) ? 0 : w + 0.2;
+                
+                deliveryRadios.forEach(radio => {
+                    const minWeight = parseFloat(radio.dataset.min);
+                    radio.disabled = totalW < minWeight;
+                    radio.parentElement.classList.toggle('disabled', totalW < minWeight);
+                });
+
+                calculateCost();
+            }
+
+            function calculateCost() {
+                const w = parseFloat(weightInput.value);
+                const totalW = isNaN(w) ? 0 : w + 0.2;
+                const selectedRadio = document.querySelector('input[name="delivery"]:checked:not([disabled])');
+                
+                if (!selectedRadio) {
+                    resultDiv.textContent = 'Введите вес и выберите способ доставки';
+                    return;
+                }
+                
+                const rate = parseFloat(selectedRadio.dataset.rate);
+                const cost = (totalW * rate).toFixed(2);
+                
+                resultDiv.innerHTML = `
+                    Общий вес: <span>${totalW.toFixed(2)} кг</span><br>
+                    Тариф: <span>${rate} $</span> за кг<br>
+                    Итого: <span>${cost} $</span>
+                `;
+            }
+
+            weightInput.addEventListener('input', updateOptions);
+            deliveryRadios.forEach(radio => {
+                radio.addEventListener('change', calculateCost);
+            });
+            
+            // Инициализация при загрузке
+            updateOptions();
+
             
             // Цены доставки
             const deliveryPrices = {
