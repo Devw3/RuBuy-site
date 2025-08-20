@@ -408,25 +408,30 @@
                   </div>
                 </div><!-- /.order-item -->
 
-                {% if item.photos and item.photos|length > 0 %}
+                 {% if item.photos and item.photos|length > 0 %}
                 <div class="admin-photos">
                   <div class="photos-label">
                     <i class="fas fa-camera"></i>
                     Фото с проверки ({{ item.photos|length }})
                   </div>
+
                   <div class="photos-grid">
                     {% for photo_url in item.photos %}
-                    <div class="photo-item"
-                        onclick="openPhotoModal({{ photo_url|tojson|safe }}, {{ item.photos|tojson|safe }}, {{ loop.index0 }})">
-                      <img src="{{ photo_url }}" alt="Фото проверки" onerror="this.src='https://via.placeholder.com/100'">
-                      {% if loop.index > 1 %}
-                      <div class="photo-count">+{{ loop.length - 1 }}</div>
-                      {% endif %}
-                    </div>
+                      <div class="photo-item"
+                          role="button"
+                          tabindex="0"
+                          data-photo='{{ photo_url|tojson|safe }}'
+                          data-photos='{{ item.photos|tojson|safe }}'
+                          data-index="{{ loop.index0 }}">
+                        <img src="{{ photo_url }}" alt="Фото проверки" onerror="this.src='https://via.placeholder.com/100'">
+                        {% if loop.last and (item.photos|length) > 3 %}
+                          <div class="photo-count">+{{ (item.photos|length) - 3 }}</div>
+                        {% endif %}
+                      </div>
                     {% endfor %}
                   </div>
                 </div>
-                {% endif %}
+              {% endif %}
               </div><!-- /.order-items -->
             </div><!-- /.order -->
             {% endfor %}
@@ -485,78 +490,139 @@
     }
 
     function openPhotoModal(photoUrl, photos, index) {
-        // Проверка на корректность данных
-        if (!Array.isArray(photos)) {
-            console.error('Invalid photos data:', photos);
-            photos = [];  // Защита от невалидных данных
+        // Если photos приходят строкой — парсим, если некорректно — делаем fallback
+        try {
+          if (!Array.isArray(photos) && typeof photos === 'string') {
+            photos = JSON.parse(photos);
+          }
+        } catch (err) {
+          console.warn('Failed to parse photos array:', err, photos);
+          photos = [];
         }
-        
+
+        if (!Array.isArray(photos)) photos = [];
+
+        index = Number(index) || 0;
+        if (photos.length === 0 && photoUrl) {
+          // если нет массива, но есть одиночная ссылка — показываем её
+          photos = [photoUrl];
+        }
+
+        if (photos.length === 0) {
+          console.warn('No photos to show', photoUrl, photos);
+          return;
+        }
+
+        // Защита индекса
+        index = Math.max(0, Math.min(index, photos.length - 1));
+
+        currentPhotos = photos;
+        currentPhotoIndex = index;
+
         const modal = document.getElementById('photoModal');
         const modalImg = document.getElementById('modalPhoto');
         const counter = document.getElementById('imageCounter');
-        
-        // Убедимся, что индекс в пределах массива
-        index = Math.max(0, Math.min(index, photos.length - 1));
-        
-        modal.style.display = 'block';
-        modalImg.src = photos[index] || photoUrl;  // Fallback на photoUrl
-        
-        currentPhotos = photos;
-        currentPhotoIndex = index;
-        
+
+        modalImg.src = currentPhotos[currentPhotoIndex];
         counter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
+
+        modal.style.display = 'block';
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
     }
     
     function navigatePhoto(direction) {
-      if (currentPhotos.length === 0) return;
-      
+      if (!currentPhotos || currentPhotos.length === 0) return;
       currentPhotoIndex += direction;
-      
-      // Циклическая навигация
       if (currentPhotoIndex < 0) currentPhotoIndex = currentPhotos.length - 1;
       if (currentPhotoIndex >= currentPhotos.length) currentPhotoIndex = 0;
-      
+
       const modalImg = document.getElementById('modalPhoto');
       const counter = document.getElementById('imageCounter');
-      
-      modalImg.src = currentPhotos[currentPhotoIndex];
-      counter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
-      
-      // Анимация перехода
+
       modalImg.style.opacity = 0;
       setTimeout(() => {
+        modalImg.src = currentPhotos[currentPhotoIndex];
+        counter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
         modalImg.style.opacity = 1;
-      }, 100);
+      }, 80);
     }
+
     
     function closePhotoModal() {
-      document.getElementById('photoModal').style.display = 'none';
+      const modal = document.getElementById('photoModal');
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
       currentPhotos = [];
+      currentPhotoIndex = 0;
+      const modalImg = document.getElementById('modalPhoto');
+      if (modalImg) modalImg.src = '';
+      document.body.style.overflow = 'auto';
     }
-    
-    window.onclick = function(event) {
-      const modal = document.getElementById('photoModal');
-      if (event.target == modal) {
-        closePhotoModal();
-      }
-    }
-    
-    // Навигация клавиатурой
-    document.addEventListener('keydown', (e) => {
-      const modal = document.getElementById('photoModal');
-      if (modal.style.display === 'block') {
-        if (e.key === 'ArrowLeft') {
-          navigatePhoto(-1);
-          e.preventDefault();
-        } else if (e.key === 'ArrowRight') {
-          navigatePhoto(1);
-          e.preventDefault();
-        } else if (e.key === 'Escape') {
-          closePhotoModal();
-          e.preventDefault();
-        }
-      }
-    });
+      
+        document.addEventListener('DOMContentLoaded', () => {
+        // Делегируем на .photos-grid (если их много, выгодно)
+        document.querySelectorAll('.photos-grid').forEach(grid => {
+          grid.addEventListener('click', (e) => {
+            // находим ближайший .photo-item
+            const item = e.target.closest('.photo-item');
+            if (!item) return;
+            try {
+              const photo = item.dataset.photo ? JSON.parse(item.dataset.photo) : null;
+              const photos = item.dataset.photos ? JSON.parse(item.dataset.photos) : null;
+              const idx = item.dataset.index ? parseInt(item.dataset.index, 10) : 0;
+              openPhotoModal(photo, photos, idx);
+            } catch (err) {
+              console.error('Error opening photo modal', err);
+            }
+          });
+
+          // keyboard accessibility: Enter или Space на .photo-item
+          grid.addEventListener('keydown', (e) => {
+            const item = e.target.closest('.photo-item');
+            if (!item) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              try {
+                const photo = item.dataset.photo ? JSON.parse(item.dataset.photo) : null;
+                const photos = item.dataset.photos ? JSON.parse(item.dataset.photos) : null;
+                const idx = item.dataset.index ? parseInt(item.dataset.index, 10) : 0;
+                openPhotoModal(photo, photos, idx);
+              } catch (err) {
+                console.error('Error opening photo modal', err);
+              }
+            }
+          });
+        });
+
+        // Кнопки модалки
+        const prevBtn = document.querySelector('.prev-btn');
+        const nextBtn = document.querySelector('.next-btn');
+        const closeBtn = document.querySelector('.close');
+
+        if (prevBtn) prevBtn.addEventListener('click', () => navigatePhoto(-1));
+        if (nextBtn) nextBtn.addEventListener('click', () => navigatePhoto(1));
+        if (closeBtn) closeBtn.addEventListener('click', closePhotoModal);
+
+        // Закрытие кликом по фону
+        window.addEventListener('click', (event) => {
+          const modal = document.getElementById('photoModal');
+          if (event.target === modal) closePhotoModal();
+        });
+
+        // клавиатура
+        document.addEventListener('keydown', (e) => {
+          const modal = document.getElementById('photoModal');
+          if (!modal) return;
+          if (modal.style.display === 'block') {
+            if (e.key === 'Escape') closePhotoModal();
+            else if (e.key === 'ArrowLeft') { navigatePhoto(-1); e.preventDefault(); }
+            else if (e.key === 'ArrowRight') { navigatePhoto(1); e.preventDefault(); }
+          }
+        });
+      });
+
+
   </script>
 </body>
 </html>

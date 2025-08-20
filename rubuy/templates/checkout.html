@@ -415,16 +415,31 @@
             const servicesTotal = document.getElementById('services-total');
             const totalAmount = document.getElementById('total-amount');
             const baseTotal = {{ total }};
+
+            const servicePrices = {
+                'photos': 10,
+                'video': 30,
+                'inspection': 20
+            };
+
+            // Функция для расчета общего количества товаров
+            function getTotalItems() {
+                let totalItems = 0;
+                document.querySelectorAll('.checkout-item').forEach(item => {
+                    totalItems += parseInt(item.dataset.quantity, 10);
+                });
+                return totalItems;
+            }
             
             // Обновление суммы услуг
             function updateServicesTotal() {
+                const totalItems = getTotalItems();
                 let servicesSum = 0;
                 
                 servicesCheckboxes.forEach(checkbox => {
                     if (checkbox.checked) {
-                        const priceElement = checkbox.closest('.service-item').querySelector('.service-price');
-                        const price = parseFloat(priceElement.textContent);
-                        servicesSum += price;
+                        const serviceValue = checkbox.value;
+                        servicesSum += servicePrices[serviceValue] * totalItems;
                     }
                 });
                 
@@ -432,7 +447,7 @@
                 const newTotal = baseTotal + servicesSum;
                 totalAmount.textContent = newTotal.toFixed(2) + ' ¥';
                 
-                // Проверяем баланс
+                // Проверка баланса
                 if (newTotal > {{ balance }}) {
                     payBtn.disabled = true;
                     payBtn.textContent = 'Недостаточно средств';

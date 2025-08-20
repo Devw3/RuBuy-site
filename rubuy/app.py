@@ -26,6 +26,12 @@ app.config.update({
     'PERMANENT_SESSION_LIFETIME': timedelta(days=7)
 })
 
+DELIVERY_RATES = {
+    'air_fast': 35,
+    'air_slow': 8,
+    'auto_fast': 7
+}
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs('instance', exist_ok=True)  # Убедимся, что папка instance существует
 db = Database(app)
@@ -196,8 +202,8 @@ def admin_panel():
     # Получаем все ожидающие заявки
     pending_replenishments = db.get_pending_replenishments()
     pending_withdrawals = db.get_pending_withdrawals()
+    orders = db.get_pending_orders()  
 
-    orders = db.get_pending_orders()    
     return render_template(
         'admin/admin_panel.html',
         user=user,
@@ -279,6 +285,7 @@ def balance():
     
     # Получаем историю транзакций
     transactions = db.get_balance_history(user_id)
+    print(transactions)
     
     return render_template('profile/balance.html',
                          balance_rub=balance_rub,
@@ -767,25 +774,46 @@ def process_payment():
                 return jsonify(success=False, error=f'Модель {model_id} не найдена'), 404
 
             price = float(row['price'])
-            total_products += price * qty
-            detailed.append({'model_id': model_id, 'quantity': qty, 'price': price})
+            product_cost = price * qty
+            total_products += product_cost
+            detailed.append({
+                'model_id': model_id,
+                'quantity': qty,
+                'price': price,
+                'product_cost': product_cost
+            })
 
         # 2) Считаем услуги
         service_prices = {'photos': 10, 'video': 30, 'inspection': 20}
-        total_services = sum(service_prices.get(s, 0) for s in services)
+        total_quantity = sum(it['quantity'] for it in detailed)
+        total_services = sum(service_prices.get(s, 0) for s in services) * total_quantity
 
-        # 3) Общая стоимость в юанях
+        # 3) Рассчитываем стоимость услуг для каждого товара пропорционально
+        for item in detailed:
+            if total_products > 0:
+                # Распределяем услуги пропорционально стоимости товара
+                item['service_cost'] = total_services * (item['product_cost'] / total_products)
+            else:
+                item['service_cost'] = total_services / len(detailed) if detailed else 0
+
+            # Общая стоимость товара с учетом услуг
+            item['total_price'] = item['product_cost'] + item['service_cost']
+
+        # 4) Общая стоимость в юанях
         total_cny = total_products + total_services
-        # 4) Проверяем баланс CNY и списываем
+
+        # 5) Проверяем баланс CNY и списываем
         user_id = session['user']['id']
         balance_cny = db.get_balance(user_id)['cny']
         if total_cny > balance_cny:
             return jsonify(success=False, error='Недостаточно средств на балансе CNY'), 400
         db.update_balance_cny(user_id, -total_cny)
 
+        # 6) Конвертируем и списываем рубли
         total_rub = convert_cny_to_rub(total_cny)
         db.update_balance_rub(user_id, -total_rub)
 
+        # 7) Генерируем уникальный трек-номер для заказа
         with db.get_cursor() as cursor:
             while True:
                 rand_num = random.randint(100000000, 9999999999)
@@ -797,9 +825,74 @@ def process_payment():
                 if cursor.fetchone()['cnt'] == 0:
                     break
 
-        order_id = None
+        # --- Вспомогательная функция: удаляет/уменьшает товар в корзине (проверяет несколько возможных таблиц) ---
+        def remove_from_cart(cursor, user_id, model_id, qty_to_remove):
+            """
+            Пытаемся найти запись в одной из известных таблиц корзины и:
+              - если есть поле quantity: уменьшаем quantity (и удаляем запись если стало <=0)
+              - если поля quantity нет: пробуем удалить запись целиком
+            Пытаемся по списку имен таблиц: cart_items, cart, basket, user_cart
+            Возвращает True если операция выполнена успешно (или таблица не найдена и мы ничего не сделали).
+            """
+            candidate_tables = ['cart_items', 'cart', 'basket', 'user_cart']
+            for table in candidate_tables:
+                try:
+                    # 1) Попробуем прочитать запись — проверим, есть ли колонка quantity
+                    cursor.execute(f"SELECT * FROM {table} WHERE user_id = ? AND model_id = ?", (user_id, model_id))
+                    row = cursor.fetchone()
+                except Exception:
+                    # Таблица не существует или ошибка — пробуем следующую
+                    continue
+
+                if not row:
+                    # Если таблица есть, но записи нет — ничего делать не нужно, считаем успешно
+                    return True
+
+                # Если у записи есть поле 'quantity' — уменьшаем
+                if 'quantity' in row.keys():
+                    try:
+                        current_qty = int(row['quantity'] or 0)
+                    except Exception:
+                        current_qty = 0
+                    new_qty = current_qty - int(qty_to_remove)
+                    if new_qty > 0:
+                        try:
+                            cursor.execute(f"UPDATE {table} SET quantity = ? WHERE user_id = ? AND model_id = ?",
+                                           (new_qty, user_id, model_id))
+                        except Exception:
+                            # если UPDATE неожиданно упал — пробуем удалить
+                            try:
+                                cursor.execute(f"DELETE FROM {table} WHERE user_id = ? AND model_id = ?",
+                                               (user_id, model_id))
+                            except Exception:
+                                pass
+                    else:
+                        # удаляем запись целиком
+                        try:
+                            cursor.execute(f"DELETE FROM {table} WHERE user_id = ? AND model_id = ?",
+                                           (user_id, model_id))
+                        except Exception:
+                            pass
+                    # После успешной операции — возвращаем True
+                    return True
+                else:
+                    # Если quantity нет — просто удаляем строку
+                    try:
+                        cursor.execute(f"DELETE FROM {table} WHERE user_id = ? AND model_id = ?",
+                                       (user_id, model_id))
+                        return True
+                    except Exception:
+                        # не получилось удалить из этой таблицы — пробуем следующую
+                        continue
+
+            # Если не нашли подходящей таблицы — считаем это нефатальной ситуацией и возвращаем True
+            # (можно логировать это место)
+            return True
+
+        # 8) Сохраняем заказы в базу данных и удаляем товары из корзины
+        order_ids = []
         with db.get_cursor() as cursor:
-            for idx, it in enumerate(detailed):
+            for item in detailed:
                 cursor.execute('''
                     INSERT INTO orders (
                         user_id, model_id, quantity,
@@ -810,25 +903,36 @@ def process_payment():
                     ) VALUES (?, ?, ?, 'ordered', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
                 ''', (
                     user_id,
-                    it['model_id'],
-                    it['quantity'],
+                    item['model_id'],
+                    item['quantity'],
                     json.dumps(services),
-                    total_cny if idx == 0 else None,
-                    our_track  if idx == 0 else None
+                    item['total_price'],  # Индивидуальная стоимость для каждого товара
+                    our_track  # Одинаковый трек-номер для всех товаров заказа
                 ))
-                if idx == 0:
-                    order_id = cursor.lastrowid
 
+                order_id = cursor.lastrowid
+                order_ids.append(order_id)
+
+                # Обновляем статус модели (как было в твоём коде)
                 cursor.execute(
                     "UPDATE models SET status = 'Принято' WHERE id = ?",
-                    (it['model_id'],)
+                    (item['model_id'],)
                 )
 
-        return jsonify(success=True, order_id=order_id, tracking_number=our_track)
+                # Удаляем / уменьшаем товар в корзине
+                try:
+                    remove_from_cart(cursor, user_id, item['model_id'], item['quantity'])
+                except Exception:
+                    # не критично — продолжаем, можно логировать
+                    pass
+
+        # Возвращаем первый order_id для совместимости
+        first_order_id = order_ids[0] if order_ids else None
+        return jsonify(success=True, order_id=first_order_id, tracking_number=our_track)
 
     except Exception as e:
         return jsonify(success=False, error=str(e)), 500
-
+    
 @app.route('/profile/orders')
 @login_required
 def profile_orders():
@@ -1151,7 +1255,6 @@ def remove_photo(order_id):
 @login_required
 def warehouse_order():
     selected = request.form.getlist('selected_items')
-    print("Выбранные товары:", selected)
     if not selected:
         flash('Выберите хотя бы один товар', 'warning')
         return redirect(url_for('warehouse'))  # или куда нужно
@@ -1162,8 +1265,6 @@ def warehouse_order():
     print(order_ids)
 
     warehouse_items = db.get_orders_by_ids(user_id, order_ids)
-    print("Товары на складе:", warehouse_items)
-
     if not warehouse_items:
         flash('Выбранные товары не найдены', 'danger')
         return redirect(url_for('warehouse'))
@@ -1176,6 +1277,125 @@ def warehouse_order():
         warehouse_items=warehouse_items,
 )
 
+@app.route('/process-shipment', methods=['POST'])
+def process_shipment():
+    try:
+        data = request.json
+        print("Received data:", data)
+        
+        # Проверка авторизации
+        if 'user' not in session:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+            
+        user_id = session['user']['id']
+        
+        # Проверка обязательных полей
+        required_fields = ['items', 'delivery', 'packaging', 'fullname', 'phone', 'city', 'address']
+        for field in required_fields:
+            if field not in data or not data[field]:
+                return jsonify({
+                    'success': False,
+                    'error': f'Поле {field} обязательно для заполнения'
+                }), 400
+        
+        # Проверка метода доставки
+        if data['delivery'] not in DELIVERY_RATES:
+            return jsonify({
+                'success': False,
+                'error': 'Указан несуществующий метод доставки'
+            }), 400
+        
+        # Расчет параметров
+        total_weight = db.calculate_total_weight(data['items'])
+        print(total_weight)
+        delivery_cost = DELIVERY_RATES[data['delivery']] * total_weight
+        total_cost = delivery_cost
+
+        user_id = session['user']['id']
+        balance_cny = db.get_balance(user_id)['cny']
+        if total_cost > balance_cny:
+            return jsonify(success=False, error='Недостаточно средств на балансе CNY'), 400
+        db.update_balance_cny(user_id, -total_cost)
+        total_rub = convert_cny_to_rub(total_cost)
+        db.update_balance_rub(user_id, -total_rub)
+
+        with db.get_cursor() as cursor: 
+            while True: 
+                rand_num = random.randint(100000000, 9999999999) 
+                our_track = f'RUBOX{rand_num}' 
+                cursor.execute("SELECT COUNT(*) AS cnt FROM order_shipments WHERE our_tracking_number = ?", (our_track,)) 
+                if cursor.fetchone()['cnt'] == 0: 
+                    break
+        
+        # Добавление в БД
+        db.add_shipment(
+            user_id=user_id,
+            model_ids=data['items'],
+            delivery_method=data['delivery'],
+            packaging=data['packaging'],
+            recipient_name=data['fullname'],
+            recipient_phone=data['phone'],
+            recipient_city=data['city'],
+            recipient_address=data['address'],
+            total_weight=total_weight,
+            delivery_cost=delivery_cost,
+            total_cost=total_cost,
+            our_tracking_number=our_track,
+        )
+
+        try:
+            if isinstance(data.get('items'), (list, tuple)):
+                try:
+                    with db.get_cursor() as cursor:
+                        for raw in data['items']:
+                            try:
+                                oid = int(raw)
+                            except Exception:
+                                # если элемент не приводится к int — пропускаем
+                                continue
+                            cursor.execute("DELETE FROM orders WHERE id = ? AND user_id = ?", (oid, user_id))
+                except Exception:
+                    # fallback: если get_cursor не доступен, используем более простой подход
+                    for raw in data['items']:
+                        try:
+                            oid = int(raw)
+                        except Exception:
+                            continue
+                        try:
+                            db.execute("DELETE FROM orders WHERE id = ? AND user_id = ?", (oid, user_id))
+                        except Exception:
+                            # игнорируем ошибки удаления, не ломаем процесс оформления
+                            pass
+        except Exception as ex_del:
+            print("Warning: failed to delete some orders from 'orders' table:", ex_del)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Отправка успешно оформлена',
+        })
+    
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Ошибка в данных: {str(e)}'
+        }), 400
+        
+    except sqlite3.Error as e:
+        print(f"SQLite error details: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Ошибка базы данных: {str(e)}'
+        }), 500
+
+@app.route('/profile/shipments')
+def shipments():    
+    user_id = session['user']['id']
+    shipments_list = db.get_shipments_with_photos(user_id)
+    print(shipments_list)
+    
+    return render_template('profile/shipments.html', shipments=shipments_list)
+
+    
 if __name__ == '__main__':
     with app.app_context():
         db.init_db()

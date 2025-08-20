@@ -529,7 +529,7 @@
                 <td>{{ order.url }}</td>
                 <td>{{ order.product_title }}</td>
                 <td>{{ order.quantity }}</td>
-                <td>{{ "%.2f"|format(order.total_price) }}</td>
+                <td>{{ "%.2f"|format(order.total_price | default(0)) }}</td>
                 </tr>
                 <!-- скрытая детализация -->
                 <tr class="order-details-row" data-id="{{ order.id }}" style="display: none; background-color: var(--light-gray);">

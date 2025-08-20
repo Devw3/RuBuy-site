@@ -28,6 +28,14 @@ def convert_rub_to_cny(rub_amount):
     cny_amount = rub_amount * rub_to_cny_rate
     return round(cny_amount, 2)
 
+def convert_cny_to_rub(cny_amount):
+    cny_to_rub_rate = get_cny_to_rub_rate()
+    if cny_to_rub_rate is None:
+        return None
+    
+    rub_amount = cny_amount * cny_to_rub_rate
+    return round(rub_amount, 2)
+
 class Database:
     def __init__(self, app=None):
         self.app = app
@@ -197,6 +205,27 @@ class Database:
                     updated_at TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id),
                     FOREIGN KEY (model_id) REFERENCES models(id)
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS order_shipments  (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    model_ids TEXT NOT NULL,
+                    delivery_method TEXT NOT NULL,
+                    packaging_options TEXT NOT NULL,
+                    recipient_name TEXT NOT NULL,
+                    recipient_phone TEXT NOT NULL,
+                    recipient_city TEXT NOT NULL,
+                    recipient_address TEXT NOT NULL,
+                    total_weight REAL NOT NULL,
+                    delivery_cost REAL NOT NULL,
+                    our_tracking_number TEXT,
+                    packaging_cost REAL NOT NULL,
+                    total_cost REAL NOT NULL,
+                    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'shipped', 'delivered')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
 
@@ -468,66 +497,192 @@ class Database:
 
 
     def get_balance_history(self, user_id):
-        """Получает историю операций с отображением изменения баланса"""
+        """
+        История баланса: replenishments, withdrawals, оплаты заказов (orders.total_price),
+        оплата CN-доставки (orders.cn_delivery_price если cn_delivery_paid = 1),
+        и order_shipments.total_cost (если есть).
+        """
         with self.get_cursor() as cursor:
-            # Получаем все операции
             cursor.execute('''
-                SELECT 
-                    amount_rub,
-                    amount_cny,
-                    created_at as date,
-                    status,
-                    'replenishment' as operation_type
-                FROM replenishments
-                WHERE user_id = ? 
-                
-                UNION ALL
-                
-                SELECT 
-                    amount as amount_rub,
-                    NULL as amount_cny,
-                    created_at as date,
-                    status,
-                    'withdrawal' as operation_type
-                FROM withdrawals
-                WHERE user_id = ? 
-                    
+                SELECT amount_rub, amount_cny, date, status, operation_type FROM (
+                    -- пополнения (RUB)
+                    SELECT 
+                        amount_rub,
+                        amount_cny,
+                        created_at AS date,
+                        status,
+                        'replenishment' AS operation_type
+                    FROM replenishments
+                    WHERE user_id = ?
+
+                    UNION ALL
+
+                    -- выводы (RUB)
+                    SELECT
+                        amount AS amount_rub,
+                        NULL AS amount_cny,
+                        created_at AS date,
+                        status,
+                        'withdrawal' AS operation_type
+                    FROM withdrawals
+                    WHERE user_id = ?
+
+                    UNION ALL
+
+                    -- оплата заказа (orders.total_price в CNY)
+                    SELECT
+                        NULL AS amount_rub,
+                        COALESCE(total_price, 0.0) AS amount_cny,
+                        created_at AS date,
+                        status,
+                        'purchase' AS operation_type
+                    FROM orders
+                    WHERE user_id = ? AND COALESCE(total_price, 0) != 0
+
+                    UNION ALL
+
+                    -- ОТДЕЛЬНО: оплата китайской доставки (orders.cn_delivery_price),
+                    -- только если пользователь уже оплатил cn_delivery_paid = 1
+                    SELECT
+                        NULL AS amount_rub,
+                        COALESCE(cn_delivery_price, 0.0) AS amount_cny,
+                        created_at AS date,
+                        CASE WHEN cn_delivery_paid = 1 THEN 'approved' ELSE 'pending' END AS status,
+                        'delivery_cn' AS operation_type
+                    FROM orders
+                    WHERE user_id = ? AND COALESCE(cn_delivery_price, 0) != 0 AND cn_delivery_paid = 1
+
+                    UNION ALL
+
+                    -- оплата отправки/доставки из order_shipments (если применимо)
+                    SELECT
+                        NULL AS amount_rub,
+                        COALESCE(total_cost, 0.0) AS amount_cny,
+                        created_at AS date,
+                        status,
+                        'shipment' AS operation_type
+                    FROM order_shipments
+                    WHERE user_id = ? AND COALESCE(total_cost, 0) != 0
+                )
                 ORDER BY date DESC
-            ''', (user_id, user_id))
-            
-            operations = cursor.fetchall()
-            current_balance_rub = self.get_balance(user_id)['rub']
+            ''', (user_id, user_id, user_id, user_id, user_id))
+
+            rows = cursor.fetchall()
+
+            # текущие балансы
+            bal = self.get_balance(user_id)
+            current_balance_rub = float(bal.get('rub', 0.0))
+            current_balance_cny = float(bal.get('cny', 0.0))
+
             history = []
-            
-            for op in operations:
-                # Для пополнения: RUB увеличивается
-                if op['operation_type'] == 'replenishment':
-                    change_rub = op['amount_rub']
-                    transaction_type = 'Пополнение'
-                    sign = '+'  # Положительное изменение
-                else:  # withdrawal
-                    change_rub = -op['amount_rub']  # Отрицательное изменение
-                    transaction_type = 'Вывод'
-                    sign = '-'  # Отрицательное изменение
-                
-                # Для утвержденных операций показываем баланс после операции
-                if op['status'] == 'approved':
-                    balance_after = current_balance_rub
-                    # Обновляем текущий баланс для следующей операции
-                    current_balance_rub -= change_rub
+
+            def get_field(row, name, idx):
+                try:
+                    return row[name]
+                except Exception:
+                    try:
+                        return row[idx]
+                    except Exception:
+                        return None
+
+            for r in rows:
+                amount_rub_raw = get_field(r, 'amount_rub', 0)
+                amount_cny_raw = get_field(r, 'amount_cny', 1)
+                date = get_field(r, 'date', 2)
+                status = get_field(r, 'status', 3)
+                op_type = get_field(r, 'operation_type', 4)
+
+                try:
+                    amount_rub_val = float(amount_rub_raw) if amount_rub_raw is not None else 0.0
+                except Exception:
+                    amount_rub_val = 0.0
+                try:
+                    amount_cny_val = float(amount_cny_raw) if amount_cny_raw is not None else 0.0
+                except Exception:
+                    amount_cny_val = 0.0
+
+                change_rub = 0.0
+                change_cny = 0.0
+                label = None
+
+                if op_type == 'replenishment':
+                    change_rub = float(amount_rub_val)
+                    label = 'Пополнение'
+                elif op_type == 'withdrawal':
+                    change_rub = -float(amount_rub_val)
+                    label = 'Вывод'
+                elif op_type == 'purchase':
+                    change_cny = -float(amount_cny_val)
+                    # конвертируем в рубли для отображения
+                    try:
+                        change_rub = -float(convert_cny_to_rub(abs(change_cny)))
+                    except Exception:
+                        change_rub = 0.0
+                    label = 'Оплата заказа'
+                elif op_type == 'delivery_cn':
+                    # специально помеченная CN-доставка (cn_delivery_price)
+                    change_cny = -float(amount_cny_val)
+                    try:
+                        change_rub = -float(convert_cny_to_rub(abs(change_cny)))
+                    except Exception:
+                        change_rub = 0.0
+                    label = 'Оплата доставки (Китай)'
+                elif op_type == 'shipment':
+                    change_cny = -float(amount_cny_val)
+                    try:
+                        change_rub = -float(convert_cny_to_rub(abs(change_cny)))
+                    except Exception:
+                        change_rub = 0.0
+                    label = 'Оплата отправки'
                 else:
-                    balance_after = None  # Для ожидающих операций баланс не меняется
-                
+                    label = op_type or 'Операция'
+                    if amount_rub_val:
+                        change_rub = -float(amount_rub_val)
+                    if amount_cny_val:
+                        change_cny = -float(amount_cny_val)
+                        try:
+                            change_rub = -float(convert_cny_to_rub(abs(change_cny)))
+                        except Exception:
+                            pass
+
+                # считаем balance_after только для подтверждённых/оплаченных статусов
+                if status is not None and str(status).lower() in ('approved', 'paid', 'completed', 'done', 'ok', 'in_warehouse', 'purchased', 'seller_sent', 'in_transit', 'shipped', 'pending'):
+                    balance_after_rub = round(current_balance_rub, 2)
+                    balance_after_cny = round(current_balance_cny, 2)
+                    current_balance_rub -= change_rub
+                    current_balance_cny -= change_cny
+                else:
+                    balance_after_rub = None
+                    balance_after_cny = None
+
+                display_amount_rub = None
+                display_amount_cny = None
+                if amount_rub_val != 0:
+                    display_amount_rub = f"{'+' if change_rub > 0 else '-'}{abs(amount_rub_val):.2f}"
+                else:
+                    if change_rub != 0:
+                        display_amount_rub = f"{'+' if change_rub > 0 else '-'}{abs(change_rub):.2f}"
+
+                if amount_cny_val != 0:
+                    display_amount_cny = f"{'+' if change_cny > 0 else '-'}{abs(amount_cny_val):.2f}"
+                else:
+                    if change_cny != 0:
+                        display_amount_cny = f"{'+' if change_cny > 0 else '-'}{abs(change_cny):.2f}"
+
                 history.append({
-                    'type': transaction_type,
-                    'amount_rub': f"{sign}{op['amount_rub']}",  # С правильным знаком
-                    'date': op['date'],
-                    'balance_after': balance_after,
-                    'status': op['status'],
-                    'change_rub': change_rub  # Для сортировки
+                    'type': label,
+                    'operation_type': op_type,
+                    'amount_rub': display_amount_rub,
+                    'amount_cny': display_amount_cny,
+                    'date': date,
+                    'status': status,
+                    'balance_after': balance_after_cny,
+                    'change_rub': change_rub,
+                    'change_cny': change_cny,
                 })
-            
+
             return history
+
     
         # Вывод
     def create_withdrawal(self, user_id: int, amount: float, card_number: str,
@@ -950,3 +1105,177 @@ class Database:
             rows = cursor.execute(query, params).fetchall()
             cols = [col[0] for col in cursor.description]
             return [dict(zip(cols, row)) for row in rows]
+        
+    def add_shipment(self,
+                    user_id: int,
+                    model_ids: list,
+                    delivery_method: str,
+                    packaging: list,
+                    recipient_name: str,
+                    recipient_phone: str,
+                    recipient_city: str,
+                    recipient_address: str,
+                    total_weight: float,
+                    delivery_cost: float,
+                    packaging_cost: float = 0.0,
+                    total_cost: float | None = None,
+                    our_tracking_number: str | None = None
+                    ) -> int:
+        model_ids_str = ','.join(map(str, model_ids)) if model_ids is not None else ''
+        packaging_str = ','.join(map(str, packaging)) if packaging else ''
+
+        with self.get_cursor() as cursor:
+            # Убедимся, что колонка our_tracking_number существует (безопасно)
+            cursor.execute("PRAGMA table_info(order_shipments)")
+            cols = [row['name'] if isinstance(row, dict) and 'name' in row else row[1] for row in cursor.fetchall()]
+            if 'our_tracking_number' not in cols:
+                try:
+                    cursor.execute("ALTER TABLE order_shipments ADD COLUMN our_tracking_number TEXT")
+                except sqlite3.OperationalError:
+                    # игнорируем — миграцию нужно сделать отдельно
+                    pass
+
+            # Вставка: перечисляем колонки без лишней запятой
+            cursor.execute('''
+                INSERT INTO order_shipments (
+                    user_id, model_ids, delivery_method, packaging_options,
+                    recipient_name, recipient_phone, recipient_city, recipient_address,
+                    total_weight, delivery_cost, packaging_cost, total_cost, our_tracking_number
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                model_ids_str,
+                delivery_method,
+                packaging_str,
+                recipient_name,
+                recipient_phone,
+                recipient_city,
+                recipient_address,
+                total_weight,
+                delivery_cost,
+                packaging_cost,
+                total_cost,
+                our_tracking_number
+            ))
+
+    
+        # добавить вес товара в заказ
+    def get_shipments_with_photos(self, user_id):
+        with self.get_cursor() as cursor:
+            try:
+                # Получаем все посылки пользователя
+                cursor.execute('''
+                    SELECT 
+                        id, 
+                        model_ids, 
+                        recipient_city, 
+                        status, 
+                        created_at, 
+                        recipient_address, 
+                        total_weight
+                    FROM order_shipments
+                    WHERE user_id = ?
+                    ORDER BY created_at DESC
+                ''', (user_id,))
+                
+                shipments = cursor.fetchall()
+                if not shipments:
+                    return []
+                
+                # Собираем все order_ids из всех посылок
+                all_order_ids = set()
+                shipments_list = []
+                
+                for shipment in shipments:
+                    # Безопасное преобразование строки в список order_ids
+                    order_ids_str = shipment[1] or ""
+                    order_ids = []
+                    
+                    try:
+                        if order_ids_str:
+                            order_ids = [int(id_str) for id_str in order_ids_str.split(',')]
+                    except ValueError:
+                        print(f"Invalid order_ids format: {order_ids_str}")
+                        order_ids = []
+                    
+                    shipment_dict = {
+                        'id': shipment[0],
+                        'order_ids': order_ids,  # Сохраняем как список
+                        'recipient_city': shipment[2],
+                        'status': shipment[3],
+                        'created_at': shipment[4],
+                        'recipient_address': shipment[5],
+                        'total_weight': shipment[6],
+                        'photo_urls': []
+                    }
+                    shipments_list.append(shipment_dict)
+                    all_order_ids.update(order_ids)
+                
+                # Если нет заказов, возвращаем посылки без фото
+                if not all_order_ids:
+                    return shipments_list
+                
+                # Получаем фотографии для всех заказов одним запросом
+                placeholders = ','.join(['?'] * len(all_order_ids))
+                cursor.execute(f'''
+                    SELECT 
+                        o.id AS order_id,
+                        m.image_url
+                    FROM orders o
+                    JOIN models m ON o.model_id = m.id
+                    WHERE o.id IN ({placeholders})
+                ''', list(all_order_ids))
+                
+                order_photos = {}
+                for row in cursor.fetchall():
+                    order_id = row[0]
+                    image_url = row[1]
+                    
+                    # Если для одного заказа несколько фото (не должно быть, но для безопасности)
+                    if order_id not in order_photos:
+                        order_photos[order_id] = image_url
+                    else:
+                        # Если уже есть фото, добавляем как дополнительное
+                        if isinstance(order_photos[order_id], list):
+                            order_photos[order_id].append(image_url)
+                        else:
+                            order_photos[order_id] = [order_photos[order_id], image_url]
+                
+                # Добавляем фото к посылкам
+                for shipment in shipments_list:
+                    for order_id in shipment['order_ids']:
+                        if order_id in order_photos:
+                            photo = order_photos[order_id]
+                            
+                            # Обработка разных форматов хранения фото
+                            if isinstance(photo, list):
+                                shipment['photo_urls'].extend(photo)
+                            else:
+                                shipment['photo_urls'].append(photo)
+                    
+                    # Ограничиваем количество фото (например, первые 3)
+                    shipment['photo_urls'] = shipment['photo_urls']
+                
+                return shipments_list
+                
+            except sqlite3.Error as e:
+                print(f"Database error: {e}")
+                return []        
+                    
+    def calculate_total_weight(self, order_ids):
+        with self.get_cursor() as cursor:
+            if not order_ids:
+                return 0.0
+            total = 0.0            
+            try:
+                for order_id in order_ids:
+                    cursor.execute('SELECT weight FROM orders WHERE id = ?', (order_id,))
+                    result = cursor.fetchone()
+                    if result and result[0]:
+                        total += float(result[0])
+                        
+                return total
+                
+            except sqlite3.Error as e:
+                print(f"Database error: {e}")
+                return 0.0

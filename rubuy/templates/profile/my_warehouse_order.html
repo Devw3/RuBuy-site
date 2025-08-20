@@ -360,7 +360,7 @@
             {% for item in warehouse_items %}
             <div class="shipment-item"> 
                 <input type="checkbox" class="item-checkbox" 
-                       data-item-id="{{ item.id }}" 
+                       data-item-id="{{ item.order_id }}" 
                        data-weight="{{ item.weight }}"
                        checked>
                 
@@ -508,197 +508,181 @@
         </button>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Элементы страницы
-            const deliveryOptions = document.querySelectorAll('input[name="delivery"]');
-            const packagingOptions = document.querySelectorAll('input[name="packaging"]');
-            const itemCheckboxes = document.querySelectorAll('.item-checkbox');
-            const confirmBtn = document.getElementById('confirm-btn');
+<script src="https://cdn.jsdelivr.net/npm/money.js@0.2.0/dist/money.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', async function() {
+        // Скрываем блок упаковки
+        document.querySelector('#packaging-cost').closest('.summary-item').style.display = 'none';
+        
+        // Получаем актуальный курс USD -> CNY
+        let exchangeRate = 7.25; // Fallback значение
+        
+        try {
+            const response = await fetch('https://www.cbr-xml-daily.ru/daily_json.js');
+            const data = await response.json();
             
-            // Элементы стоимости
-            const deliveryCostEl = document.getElementById('delivery-cost');
-            const packagingCostEl = document.getElementById('packaging-cost');
-            const totalAmountEl = document.getElementById('total-amount');
-            const weightInput = document.getElementById('weight');
-            const deliveryRadios = document.querySelectorAll('input[name="delivery"]');
-            const resultDiv = document.getElementById('result');
-
-            function updateOptions() {
-                const w = parseFloat(weightInput.value);
-                const totalW = isNaN(w) ? 0 : w + 0.2;
-                
-                deliveryRadios.forEach(radio => {
-                    const minWeight = parseFloat(radio.dataset.min);
-                    radio.disabled = totalW < minWeight;
-                    radio.parentElement.classList.toggle('disabled', totalW < minWeight);
-                });
-
-                calculateCost();
+            const usdToRub = data.Valute.USD.Value;
+            const cnyToRub = data.Valute.CNY.Value;
+            
+            if (usdToRub && cnyToRub) {
+                exchangeRate = usdToRub / cnyToRub;
+                console.log('Актуальный курс USD/CNY:', exchangeRate);
             }
+        } catch (error) {
+            console.error('Ошибка загрузки курсов:', error);
+        }
+        
+        // Элементы страницы
+        const deliveryOptions = document.querySelectorAll('input[name="delivery"]');
+        const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+        const confirmBtn = document.getElementById('confirm-btn');
+        const deliveryCostEl = document.getElementById('delivery-cost');
+        const totalAmountEl = document.getElementById('total-amount');
 
-            function calculateCost() {
-                const w = parseFloat(weightInput.value);
-                const totalW = isNaN(w) ? 0 : w + 0.2;
-                const selectedRadio = document.querySelector('input[name="delivery"]:checked:not([disabled])');
-                
-                if (!selectedRadio) {
-                    resultDiv.textContent = 'Введите вес и выберите способ доставки';
-                    return;
-                }
-                
-                const rate = parseFloat(selectedRadio.dataset.rate);
-                const cost = (totalW * rate).toFixed(2);
-                
-                resultDiv.innerHTML = `
-                    Общий вес: <span>${totalW.toFixed(2)} кг</span><br>
-                    Тариф: <span>${rate} $</span> за кг<br>
-                    Итого: <span>${cost} $</span>
-                `;
-            }
+        // Функция конвертации USD в CNY
+        function usdToCny(usd) {
+            return (usd * exchangeRate).toFixed(2) + ' ¥';
+        }
 
-            weightInput.addEventListener('input', updateOptions);
-            deliveryRadios.forEach(radio => {
-                radio.addEventListener('change', calculateCost);
-            });
-            
-            // Инициализация при загрузке
-            updateOptions();
-
-            
-            // Цены доставки
-            const deliveryPrices = {
-                'standart': 15,
-                'express': 25,
-                'cdek': 30
-            };
-            
-            // Цены упаковки
-            const packagingPrices = {
-                'basic': 0,
-                'premium': 10,
-                'gift': 15
-            };
-            
-            // Обновление стоимости
-            function updateCost() {
-                // Рассчет общего веса выбранных товаров
-                let totalWeight = 0;
-                itemCheckboxes.forEach(checkbox => {
-                    if (checkbox.checked) {
-                        totalWeight += parseFloat(checkbox.dataset.weight);
-                    }
-                });
-                
-                // Рассчет стоимости доставки
-                let deliveryCost = 0;
-                deliveryOptions.forEach(option => {
-                    if (option.checked) {
-                        deliveryCost = deliveryPrices[option.value] * totalWeight;
-                    }
-                });
-                
-                // Рассчет стоимости упаковки
-                let packagingCost = 0;
-                packagingOptions.forEach(option => {
-                    if (option.checked) {
-                        packagingCost += packagingPrices[option.value];
-                    }
-                });
-                
-                // Общая стоимость
-                const totalCost = deliveryCost + packagingCost;
-                
-                // Обновление значений на странице
-                deliveryCostEl.textContent = deliveryCost.toFixed(2) + ' ¥';
-                packagingCostEl.textContent = packagingCost.toFixed(2) + ' ¥';
-                totalAmountEl.textContent = totalCost.toFixed(2) + ' ¥';
-                
-                // Активация/деактивация кнопки
-                confirmBtn.disabled = totalWeight === 0;
-            }
-            
-            // Обработчики событий
+        // Обновление доступных опций доставки
+        function updateDeliveryOptions(totalWeight) {
             deliveryOptions.forEach(option => {
-                option.addEventListener('change', updateCost);
+                const minWeight = parseFloat(option.dataset.min);
+                const isDisabled = totalWeight < minWeight;
+                
+                option.disabled = isDisabled;
+                option.parentElement.classList.toggle('disabled', isDisabled);
             });
-            
-            packagingOptions.forEach(option => {
-                option.addEventListener('change', updateCost);
-            });
-            
+        }
+
+        // Основная функция расчета стоимости
+        function updateCost() {
+            // Расчет общего веса
+            let totalWeight = 0;
             itemCheckboxes.forEach(checkbox => {
-                checkbox.addEventListener('change', updateCost);
-            });
-            
-            // Обработка оформления отправки
-            confirmBtn.addEventListener('click', function() {
-                // Сбор выбранных товаров
-                const selectedItems = [];
-                itemCheckboxes.forEach(checkbox => {
-                    if (checkbox.checked) {
-                        selectedItems.push(checkbox.dataset.itemId);
-                    }
-                });
-                
-                // Проверка выбора товаров
-                if (selectedItems.length === 0) {
-                    alert('Выберите хотя бы один товар для отправки');
-                    return;
+                if (checkbox.checked) {
+                    totalWeight += parseFloat(checkbox.dataset.weight);
                 }
+            });
+
+            // Обновление доступных способов доставки
+            updateDeliveryOptions(totalWeight);
+
+            // Расчет стоимости доставки
+            let deliveryCostUSD = 0;
+            const selectedDelivery = document.querySelector('input[name="delivery"]:checked:not([disabled])');
+            
+            if (selectedDelivery && totalWeight > 0) {
+                const rate = parseFloat(selectedDelivery.dataset.rate);
+                const minWeight = parseFloat(selectedDelivery.dataset.min);
                 
-                // Получение выбранного способа доставки
-                let selectedDelivery = '';
-                deliveryOptions.forEach(option => {
-                    if (option.checked) {
-                        selectedDelivery = option.value;
-                    }
-                });
-                
-                // Сбор выбранных опций упаковки
-                const selectedPackaging = [];
-                packagingOptions.forEach(option => {
-                    if (option.checked && option.value !== 'basic') {
-                        selectedPackaging.push(option.value);
-                    }
-                });
-                
-                // Показ загрузки
-                confirmBtn.disabled = true;
-                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Оформление...';
-                
-                // Отправка данных на сервер
-                fetch('/process-shipment', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        items: selectedItems,
-                        delivery: selectedDelivery,
-                        packaging: selectedPackaging
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Отправка успешно оформлена!');
-                        window.location.href = '/profile/orders';
-                    } else {
-                        alert('Ошибка: ' + (data.error || 'Попробуйте снова'));
-                        confirmBtn.disabled = false;
-                        confirmBtn.textContent = 'Оформить отправку';
-                    }
-                })
-                .catch(error => {
-                    console.error('Ошибка:', error);
-                    alert('Произошла ошибка при оформлении отправки');
-                    confirmBtn.disabled = false;
-                    confirmBtn.textContent = 'Оформить отправку';
-                });
+                // Применяем минимальный вес если нужно
+                const deliveryWeight = totalWeight < minWeight ? minWeight : totalWeight;
+                deliveryCostUSD = deliveryWeight * rate;
+            }
+
+            // Обновление UI
+            deliveryCostEl.textContent = usdToCny(deliveryCostUSD);
+            totalAmountEl.textContent = usdToCny(deliveryCostUSD);
+            
+            // Активация кнопки
+            confirmBtn.disabled = totalWeight === 0;
+        }
+
+        // Обработчики событий
+        deliveryOptions.forEach(option => {
+            option.addEventListener('change', updateCost);
+        });
+
+        itemCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateCost);
+        });
+
+        // Обработка оформления заказа
+        confirmBtn.addEventListener('click', function() {
+            // Сбор выбранных товаров
+            const selectedItems = [];
+            document.querySelectorAll('.item-checkbox:checked').forEach(checkbox => {
+                selectedItems.push(parseInt(checkbox.dataset.itemId));
             });
             
-            // Инициализация стоимости
-            updateCost();
+            // Проверка выбора товаров
+            if (selectedItems.length === 0) {
+                alert('Выберите хотя бы один товар для отправки');
+                return;
+            }
+            
+            // Получение выбранного способа доставки
+            const selectedDelivery = document.querySelector('input[name="delivery"]:checked').value;
+            const selectedPackaging = document.querySelector('input[name="packaging"]:checked').value;
+
+            
+            // Сбор данных получателя
+            const recipientData = {
+                fullname: document.getElementById('fullname').value.trim(),
+                phone: document.getElementById('phone').value.trim(),
+                city: document.getElementById('city').value.trim(),
+                address: document.getElementById('address').value.trim()
+            };
+            
+            // Валидация данных
+            if (!recipientData.fullname || !recipientData.phone || 
+                !recipientData.city || !recipientData.address) {
+                alert('Заполните все поля получателя');
+                return;
+            }
+            
+            // Показ загрузки
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Оформление...';
+            
+            // Подготовка данных
+            const shipmentData = {
+                items: selectedItems,
+                delivery: selectedDelivery,
+                packaging: [selectedPackaging],
+                exchangeRate: exchangeRate, // Передаём курс на сервер
+                ...recipientData
+            };
+            
+            // Отправка данных на сервер
+            fetch('/process-shipment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(shipmentData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    // Пытаемся получить текст ошибки от сервера
+                    return response.json().then(errData => {
+                        throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+                    }).catch(() => {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    alert(`Отправка #${data.shipment_id} успешно оформлена!`);
+                    window.location.href = '/profile/orders';
+                } else {
+                    throw new Error(data.error || 'Неизвестная ошибка сервера');
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert(`Ошибка оформления: ${error.message}`);
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Оформить отправку';
+            });
+
         });
-    </script>
+        updateCost();
+    });
+</script>
 </body>
 </html>
