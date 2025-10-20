@@ -11,7 +11,7 @@
       margin: 0;
       padding: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #1a0000 0%, #000000 100%);
+      background: #1a1a1a;
       color: #fff;
       height: 100vh;
       display: flex;
@@ -32,7 +32,7 @@
             <div class="wallet-section mb-4">
               <div class="profile-header d-flex align-items-center mb-3">
 
-                <div class="profile-info text-light">
+              <div class="profile-info text-light">
                   <h3>{{ user.name }}</h3>
                   <small>Регион: {{ user.region }}</small>
                 </div>
@@ -40,25 +40,27 @@
               <div class="profile_counts d-flex mb-2">
                 <div class="wallet-amount display-5 text-light">
                   <a href="{{ url_for('balance') }}" class="text-light text-decoration-none">
-                      {{ balance_cny }} ¥ 
+                      {{ balance_cny|round(2) }} ¥
                   </a>
                 </div>
               </div>
               <div class="wallet-label text-secondary mb-3">Мой кошелек</div>
 
               <div class="icon-menu mb-4">
-                <div class="icon-item d-flex align-items-center p-2">
+                <a href="{{ url_for('profile_orders') }}" class="icon-item d-flex align-items-center p-2 text-decoration-none">
                   <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
                   </svg>
                   <span class="icon-text text-light">Заказы</span>
-                </div>
-                <div class="icon-item d-flex align-items-center p-2">
-                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
-                  </svg>
-                  <span class="icon-text text-light">Мой Склад</span>
-                </div>
+                </a>
+                <a href="{{ url_for('warehouse') }}">
+                  <div class="icon-item d-flex align-items-center p-2">
+                    <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+                    </svg>
+                    <span class="icon-text text-light">Мой Склад</span>
+                  </div>
+                </a>
                 <div class="icon-item d-flex align-items-center p-2">
                   <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
@@ -66,12 +68,14 @@
                   </svg>
                   <span class="icon-text text-light">Подписки</span>
                 </div>
-                <div class="icon-item d-flex align-items-center p-2">
-                  <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/>
-                  </svg>
-                  <span class="icon-text text-light">Посылки</span>
-                </div>
+                <a href="{{ url_for('shipments') }}">
+                  <div class="icon-item d-flex align-items-center p-2">
+                    <svg class="menu-icon me-2" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/>
+                    </svg>
+                    <span class="icon-text text-light">Посылки</span>
+                  </div>
+                </a>
               </div>
 
               <div class="wallet-section mb-2">

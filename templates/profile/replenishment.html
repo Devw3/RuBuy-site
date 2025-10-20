@@ -263,7 +263,7 @@
 <body>
     <a href="{{url_for('balance')}}" class="back-button">← Назад к балансу</a>
     
-    <div class="balance-header">{{ balance_cny }} ¥ ( {{ balance_rub }} P)</div>
+    <div class="balance-header">{{ balance_cny|round(2) }} ¥ ( {{ balance_rub|round(2) }} P)</div>
     
     <div class="section">
         <h2 class="section-title">Реквизиты для пополнения</h2>

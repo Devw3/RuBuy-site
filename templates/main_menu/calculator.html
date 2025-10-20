@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Калькулятор доставки</title>
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .calc-container {
+      max-width: 500px;
+      margin: 70px auto;
+      background: #1a1a1a;
+      border: 2px solid red;
+      border-radius: 8px;
+      padding: 50px;
+    }
+    .calc-container h2 {
+      text-align: center;
+      color: #e53935;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #222;
+      color: #fff;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #e53935;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #222;
+      border: 1px solid #e53935;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 18px;
+    }
+    .back-button {
+        color: var(--primary-red);
+        text-decoration: none;
+        display: flex;
+        justify-content: center;
+        color: #e53935;
+        margin-bottom: 20px;
+        font-weight: bold;
+        font-size: 20px;
+    }
+    .result span {
+      color: #e53935;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <a href="{{url_for('index')}}" class="back-button">← Главная</a>
+
+  <div class="calc-container">
+    <h2>Калькулятор доставки</h2>
+    <div class="form-group">
+      <label for="weight">Вес товара (кг)</label>
+      <input type="number" id="weight" min="0.01" step="0.01" placeholder="Например, 2.50" />
+    </div>
+    <div class="form-group">
+      <label for="method">Вариант доставки</label>
+      <select id="method">
+        <option value="" disabled selected>Выберите способ</option>
+        <option value="air_fast" data-rate="35" data-min="1">Авиа 3-5 дней — 35 $ за кг (от 1 кг)</option>
+        <option value="air_slow" data-rate="8" data-min="10">Авиа 9-13 дней — 8 $ за кг (от 10 кг)</option>
+        <option value="auto_fast" data-rate="7" data-min="1">Авто 12-15 дней — 7 $ за кг (от 1 кг)</option>
+      </select>
+    </div>
+    <div class="result" id="result">
+      Введите вес и выберите способ доставки
+    </div>
+  </div>
+
+  <script>
+    const weightInput = document.getElementById('weight');
+    const methodSelect = document.getElementById('method');
+    const resultDiv   = document.getElementById('result');
+
+    function updateOptions() {
+      const w = parseFloat(weightInput.value);
+      // общий вес с упаковкой
+      const totalW = isNaN(w) ? 0 : w + 0.2;
+      // перебираем варианты
+      Array.from(methodSelect.options).forEach(opt => {
+        if (!opt.value) return; // заглушка
+        const min = parseFloat(opt.dataset.min);
+        opt.disabled = totalW < min;
+      });
+      // если выбран уже недоступный — сброс
+      if (methodSelect.selectedOptions.length &&
+          methodSelect.selectedOptions[0].disabled) {
+        methodSelect.value = '';
+      }
+      calculateCost();
+    }
+
+    function calculateCost() {
+      const w = parseFloat(weightInput.value);
+      const totalW = isNaN(w) ? 0 : w + 0.2;
+      const opt = methodSelect.selectedOptions[0];
+      if (!opt || opt.disabled) {
+        resultDiv.textContent = 'Введите вес и выберите способ доставки';
+        return;
+      }
+      const rate = parseFloat(opt.dataset.rate);
+      const cost = (totalW * rate).toFixed(2);
+      resultDiv.innerHTML = `
+        Общий вес: <span>${totalW.toFixed(2)} кг</span><br>
+        Тариф: <span>${rate} $</span> за кг<br>
+        Итого: <span>${cost} $</span>
+      `;
+    }
+
+    weightInput.addEventListener('input', updateOptions);
+    methodSelect.addEventListener('change', calculateCost);
+  </script>
+</body>
+</html>

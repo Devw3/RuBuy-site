@@ -249,7 +249,7 @@
     <a href="{{url_for('profile')}}" class="back-button">← Профиль</a>
 
     <header>
-        <div class="balance-header">{{ balance_cny }} ¥ ( {{ balance_rub }} P)</div>
+        <div class="balance-header">{{ balance_cny|round(2) }} ¥ ( {{ balance_rub|round(2) }} P)</div>
         <div class="actions">
                 <a href="{{ url_for('replenishment') }}" class="btn btn-topup">Пополнить</a>
                 <a href="{{ url_for('withdraw') }}" class="btn btn-withdraw">Вывести</a>
@@ -276,17 +276,28 @@
                     <div class="transaction-date">
                         {{ transaction.date.strftime('%d.%m.%Y %H:%M') }}
                     </div>
-                    {% if transaction.status == 'pending' %}
-                    <div class="status-pending">В обработке</div>
+
+                    {% if transaction.type %}
+                    <div class="transaction-type" style="margin-top:6px; font-weight:600; color:#e6e6e6;">
+                        {{ transaction.type }}
+                    </div>
+                    {% elif transaction.operation_type %}
+                    <div class="transaction-type" style="margin-top:6px; font-weight:600; color:#e6e6e6;">
+                        {{ transaction.operation_type }}
+                    </div>
                     {% endif %}
+
+                    <!-- {% if transaction.status == 'pending' %}
+                    <div class="status-pending" style="margin-top:5px;">В обработке</div>
+                    {% endif %} -->
                 </td>
                 <td class="transaction-cell">
                     <div class="amount {% if transaction.change_rub > 0 %}positive{% else %}negative{% endif %}">
-                        {{ transaction.amount_rub }} ₽
+                        {{ transaction.amount_cny }} ¥
                     </div>
                     {% if transaction.balance_after is not none %}
                     <div class="balance-after">
-                        Баланс: {{ "%.2f"|format(transaction.balance_after) }} ₽
+                        Баланс: {{ "%.2f"|format(transaction.balance_after) }} ¥
                     </div>
                     {% endif %}
                 </td>
