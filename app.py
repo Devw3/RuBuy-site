@@ -7,6 +7,7 @@ from datetime import timedelta
 import requests
 import random
 from threading import Thread
+from dotenv import load_dotenv
 from base import Database
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.utils import secure_filename
@@ -14,15 +15,25 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from parser.taobao import parse_taobao_product
 from parser.weidian import parse_weidian_product
 
+load_dotenv()
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-API_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc2VybmFtZSI6Im1jcWVlbjk1OTUiLCJDb21pZCI6bnVsbCwiUm9sZWlkIjpudWxsLCJpc3MiOiJ0bWFwaSIsInN1YiI6Im1jcWVlbjk1OTUiLCJhdWQiOlsiIl0sImlhdCI6MTc1MTY0MzIxNn0.EAeSwRbi7N4pvC71EnJCfEroQicKwz4J4ZvjWFTSUXs"
-LOGISTIC_MARKUP_PCT = 0.03
+
+API_TOKEN = os.getenv("API_TOKEN")
+LOGISTIC_MARKUP_PCT = float(os.getenv("LOGISTIC_MARKUP_PCT", 0.03))
+SECRET_KEY = os.getenv("SECRET_KEY")
+UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")
+DATABASE = os.getenv("DATABASE", "instance/users.db")
+
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin1")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "123456")
+
+
 app = Flask(__name__)
 app.config.update({
-    'DATABASE': 'instance/users.db',
-    'SECRET_KEY': 'c4a2d768d37d4c7c8a4d94f37242b1e2cfb9b77aaf25fa13a86f44bd3c3d69f4',
-    'UPLOAD_FOLDER': UPLOAD_FOLDER, 
+    'DATABASE': DATABASE,
+    'SECRET_KEY': SECRET_KEY,
+    'UPLOAD_FOLDER': UPLOAD_FOLDER,
     'PERMANENT_SESSION_LIFETIME': timedelta(days=7)
 })
 
@@ -30,6 +41,13 @@ DELIVERY_RATES = {
     'air_fast': 35,
     'air_slow': 8,
     'auto_fast': 7
+}
+
+SHIPMENT_STATUSES = {
+    "pending":    "Ожидает обработки",
+    "processing": "В обработке",
+    "shipped":    "В пути",
+    "delivered":  "Доставлено",
 }
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -216,6 +234,36 @@ def admin_panel():
         orders=orders, 
         shipments=pending_shipments
     )
+
+@app.route('/admin/shipments/<int:shipment_id>/packaging', methods=['POST'])
+def admin_set_packaging(shipment_id):
+    # TODO: тут проверь, что user — админ
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = float(data.get('amount_cny', 0))
+    except Exception:
+        return jsonify({'success': False, 'error': 'amount_cny должен быть числом'}), 400
+    if amount < 0:
+        return jsonify({'success': False, 'error': 'Сумма не может быть отрицательной'}), 400
+
+    try:
+        with db.get_cursor() as cursor:
+            # проверим, что посылка есть
+            row = cursor.execute(
+                "SELECT id FROM order_shipments WHERE id = ?", (shipment_id,)
+            ).fetchone()
+            if not row:
+                return jsonify({'success': False, 'error': 'Посылка не найдена'}), 404
+
+            cursor.execute("""
+                UPDATE order_shipments
+                SET packaging_cost = ?, packaging_paid = 0
+                WHERE id = ?
+            """, (amount, shipment_id))
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.exception("admin_set_packaging failed: %s", e)
+        return jsonify({'success': False, 'error': 'DB error'}), 500
 
 def get_cny_to_rub_rate():
     try:
@@ -1342,6 +1390,7 @@ def calc_delivery_cost_with_pct(
 
 @app.route('/process-shipment', methods=['POST'])
 def process_shipment():
+    import json
     try:
         data = request.get_json(silent=True)
         app.logger.debug("process-shipment: incoming data: %s", data)
@@ -1351,7 +1400,7 @@ def process_shipment():
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
         user_id = session['user']['id']
 
-        # Провера полей
+        # Проверка полей
         required = ['items', 'delivery', 'packaging', 'fullname', 'phone', 'city', 'address']
         for f in required:
             if f not in data or data[f] in (None, '', [], {}):
@@ -1363,44 +1412,59 @@ def process_shipment():
         if delivery_key not in DELIVERY_RATES:
             return jsonify({'success': False, 'error': 'Указан несуществующий метод доставки'}), 400
 
-        # Нормализация items -> список int
+        # --- Нормализация и валидация items как orders.id текущего пользователя ---
         raw_items = data['items']
-        items = []
+        candidate_ids = []
         if isinstance(raw_items, (list, tuple)):
             for v in raw_items:
                 try:
-                    items.append(int(v))
+                    candidate_ids.append(int(v))
                 except Exception:
                     app.logger.warning("Bad item id skipped: %r", v)
         else:
             try:
-                items = [int(raw_items)]
+                candidate_ids = [int(raw_items)]
             except Exception:
                 return jsonify({'success': False, 'error': 'Поле items должно быть списком идентификаторов'}), 400
 
-        if not items:
+        if not candidate_ids:
             return jsonify({'success': False, 'error': 'Нужно указать хотя бы один товар'}), 400
 
-        # Вес: используем ваш helper
-        total_weight = db.calculate_total_weight(items)
+        # Оставляем только те id, которые реально принадлежат этому пользователю
+        # и существуют в таблице orders
+        with db.get_cursor() as cursor:
+            placeholders = ','.join(['?'] * len(candidate_ids))
+            rows = cursor.execute(
+                f"SELECT id FROM orders WHERE user_id = ? AND id IN ({placeholders})",
+                (user_id, *candidate_ids)
+            ).fetchall()
+        valid_ids_set = { (r['id'] if isinstance(r, dict) else r[0]) for r in rows }
+
+        # Сохраняем исходный порядок и убираем дубли
+        seen = set()
+        order_ids = [oid for oid in candidate_ids if (oid in valid_ids_set and (oid not in seen and not seen.add(oid)))]
+
+        if not order_ids:
+            return jsonify({'success': False, 'error': 'Не найдено валидных заказов пользователя'}), 400
+
+        # Вес по валидным orders.id
+        total_weight = db.calculate_total_weight(order_ids)
         app.logger.debug("calculate_total_weight -> %r", total_weight)
         if total_weight is None:
             return jsonify({'success': False, 'error': 'Не удалось вычислить вес'}), 400
 
-        # Курсы ЦБ (fetch_cbr_rates должен возвращать либо {'USD':..., 'CNY':...} либо полный JSON)
+        # Курсы ЦБ
         rates = fetch_cbr_rates()
         if not rates:
             app.logger.error("fetch_cbr_rates failed -> %r", rates)
             return jsonify({'success': False, 'error': 'Не удалось получить курсы валют (ЦБ)'}), 500
 
-        # Попытка извлечь значения в двух вариантах
+        # Извлекаем курс
         try:
-            # вариант: {'USD': 93.0, 'CNY': 12.5}
             usd_to_rub = float(rates.get('USD'))
             cny_to_rub = float(rates.get('CNY'))
         except Exception:
             try:
-                # вариант: полный JSON с Valute
                 usd_to_rub = float(rates['Valute']['USD']['Value'])
                 cny_to_rub = float(rates['Valute']['CNY']['Value'])
             except Exception as e:
@@ -1411,19 +1475,17 @@ def process_shipment():
             app.logger.error("Invalid rates: usd_to_rub=%r, cny_to_rub=%r", usd_to_rub, cny_to_rub)
             return jsonify({'success': False, 'error': 'Некорректные курсы валют'}), 500
 
-        # P в USD/kg
+        # Тариф USD/кг
         P_usd_per_kg = float(DELIVERY_RATES[delivery_key])
 
-        # Опциональные параметры наценки/комиссии из тела запроса
+        # Опциональные параметры
         m_pct        = float(data.get('m_pct', 0.03))
         fee_cny      = float(data.get('fee_cny', 0.0))
         min_pct      = float(data.get('min_pct', 0.0))
         max_pct      = float(data.get('max_pct', 0.15))
         round_digits = int(data.get('round_digits', 2))
 
-        # Расчёт через твою формулу с учётом курсов ЦБ:
-        # usd_to_rub = RUB за 1 USD
-        # cny_to_rub = RUB за 1 CNY
+        # Расчёт
         calc = calc_delivery_cost_with_pct(
             P_usd_per_kg=P_usd_per_kg,
             weight_kg=float(total_weight),
@@ -1438,8 +1500,8 @@ def process_shipment():
 
         usd_total        = calc["usd_total"]
         K_cny_per_usd    = calc["K_cny_per_usd"]
-        total_cost_cny   = calc["cny_charge"]        # что списываем с CNY-баланса
-        total_cost_rub   = calc["rub_equivalent"]    # эквивалент для учёта в рублях
+        total_cost_cny   = calc["cny_charge"]
+        total_cost_rub   = calc["rub_equivalent"]
         used_pct         = calc["used_pct"]
         fee_cny_rounded  = calc["fee_cny"]
 
@@ -1450,21 +1512,20 @@ def process_shipment():
             m_pct, used_pct, fee_cny_rounded, total_cost_cny, total_cost_rub
         )
 
-        # Проверка баланса (CNY)
+        # Проверка баланса CNY
         balance = db.get_balance(user_id)
-        balance_cny = balance.get('cny', 0) if balance else 0
-        app.logger.debug("User %s balance_cny=%s need=%s", user_id, balance_cny, total_cost_cny)
-        if total_cost_cny > balance_cny:
+        balance_cny = float(balance.get('cny', 0)) if balance else 0.0
+        if float(total_cost_cny) > balance_cny:
             return jsonify({'success': False, 'error': 'Недостаточно средств на балансе CNY'}), 400
 
-        # Списание (CNY обязательно, RUB — опционально, если ведёте зеркальный учёт)
-        db.update_balance_cny(user_id, -total_cost_cny)
+        # Списание CNY (и опционально зеркальный RUB)
+        db.update_balance_cny(user_id, -float(total_cost_cny))
         try:
-            db.update_balance_rub(user_id, -total_cost_rub)
+            db.update_balance_rub(user_id, -float(total_cost_rub))
         except Exception:
             app.logger.debug("update_balance_rub failed or not needed; continuing")
 
-        # Генерация трека как у тебя:
+        # Генерация уникального трека
         with db.get_cursor() as cursor:
             while True:
                 rand_num = random.randint(100000000, 9999999999)
@@ -1475,39 +1536,47 @@ def process_shipment():
                 if cnt == 0:
                     break
 
-        # Сохранение отправки (стоимость доставки — в CNY)
+        # Нормализуем packaging_options: всегда список строк
+        packaging_raw = data['packaging']
+        if isinstance(packaging_raw, (list, tuple)):
+            packaging_options = [str(x) for x in packaging_raw]
+        else:
+            packaging_options = [str(packaging_raw)]
+
+        # Сохранение отправки (стоимость доставки — в CNY).
+        # model_ids сохраняем как JSON-строку строго по orders.id текущего пользователя.
         db.add_shipment(
             user_id=user_id,
-            model_ids=json.dumps(items),   # <-- items = список orders.id
+            model_ids=json.dumps(order_ids, ensure_ascii=False),
             delivery_method=delivery_key,
-            packaging=(data['packaging'] if isinstance(data['packaging'], (list, tuple)) else [data['packaging']]),
+            packaging_options=packaging_options,   # <-- ВАЖНО: правильное имя аргумента
             recipient_name=str(data['fullname']),
             recipient_phone=str(data['phone']),
             recipient_city=str(data['city']),
             recipient_address=str(data['address']),
-            total_weight=total_weight,
-            delivery_cost=total_cost_cny,
+            total_weight=float(total_weight),
+            delivery_cost=float(total_cost_cny),
             packaging_cost=0.0,
-            total_cost=total_cost_cny,
+            total_cost=float(total_cost_cny),
             our_tracking_number=our_track
+            # статус не передаем — пусть отработает DEFAULT 'pending' вашей таблицы
         )
 
-        # Обновление статусов заказов (как у тебя)
+        # Обновление статусов заказов
         try:
-            if items:
-                with db.get_cursor() as cursor:
-                    for oid in items:
-                        try:
-                            cursor.execute(
-                                "UPDATE orders SET status = ? WHERE id = ? AND user_id = ?",
-                                ('in_shipment', oid, user_id)
-                            )
-                        except Exception:
-                            app.logger.exception("Failed updating order %s", oid)
+            with db.get_cursor() as cursor:
+                for oid in order_ids:
+                    try:
+                        cursor.execute(
+                            "UPDATE orders SET status = ? WHERE id = ? AND user_id = ?",
+                            ('in_shipment', oid, user_id)
+                        )
+                    except Exception:
+                        app.logger.exception("Failed updating order %s", oid)
         except Exception:
             app.logger.exception("Failed updating orders (non-fatal)")
 
-        # Ответ клиенту с подробностями расчёта
+        # Ответ клиенту
         return jsonify({
             'success': True,
             'tracking': our_track,
@@ -1528,21 +1597,177 @@ def process_shipment():
         app.logger.exception("Unexpected error in /process-shipment: %s", e)
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
+@app.route('/pay-packaging', methods=['POST'])
+def pay_packaging():
+    if 'user' not in session:
+        return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+
+    user_id = int(session['user']['id'])
+    data = request.get_json(silent=True) or {}
+    shipment_id = data.get('shipment_id')
+
+    try:
+        shipment_id = int(shipment_id)
+    except Exception:
+        return jsonify({'success': False, 'error': 'Некорректный shipment_id'}), 400
+
+    try:
+        with db.get_cursor() as cursor:
+            # Начинаем транзакцию вручную, чтобы списание и UPDATE были атомарными
+            cursor.execute("BEGIN")
+
+            row = cursor.execute("""
+                SELECT id, user_id, packaging_cost, packaging_paid
+                FROM order_shipments
+                WHERE id = ?
+            """, (shipment_id,)).fetchone()
+
+            if not row:
+                cursor.execute("ROLLBACK")
+                return jsonify({'success': False, 'error': 'Посылка не найдена'}), 404
+
+            # dict/tuple safe getters
+            def g(r, key, idx):
+                if isinstance(r, dict):
+                    return r.get(key)
+                return r[idx]
+
+            owner_id       = int(g(row, 'user_id', 1))
+            packaging_cost = g(row, 'packaging_cost', 2)
+            packaging_paid = g(row, 'packaging_paid', 3)
+
+            # приводим типы
+            try:
+                packaging_cost = float(packaging_cost or 0.0)
+            except Exception:
+                packaging_cost = 0.0
+            try:
+                packaging_paid = int(packaging_paid or 0)
+            except Exception:
+                packaging_paid = 0
+
+            if owner_id != user_id:
+                cursor.execute("ROLLBACK")
+                return jsonify({'success': False, 'error': 'Нет доступа'}), 403
+            if packaging_cost <= 0:
+                cursor.execute("ROLLBACK")
+                return jsonify({'success': False, 'error': 'Упаковка не выставлена'}), 400
+            if packaging_paid == 1:
+                cursor.execute("ROLLBACK")
+                return jsonify({'success': False, 'error': 'Упаковка уже оплачена'}), 400
+
+            # проверяем баланс CNY
+            balance = db.get_balance(user_id) or {}
+            try:
+                balance_cny = float(balance.get('cny', 0))
+            except Exception:
+                balance_cny = 0.0
+
+            if packaging_cost > balance_cny:
+                cursor.execute("ROLLBACK")
+                return jsonify({'success': False, 'error': 'Недостаточно средств на балансе CNY'}), 400
+
+            # списываем и помечаем оплачено
+            db.update_balance_cny(user_id, -packaging_cost)
+            cursor.execute("""
+                UPDATE order_shipments
+                SET packaging_paid = 1
+                WHERE id = ?
+            """, (shipment_id,))
+
+            cursor.execute("COMMIT")
+
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.exception("pay_packaging failed: %s", e)
+        # в случае сбоя откатываем, чтобы не осталось «полусостояния»
+        try:
+            with db.get_cursor() as cursor:
+                cursor.execute("ROLLBACK")
+        except Exception:
+            pass
+        return jsonify({'success': False, 'error': 'DB error'}), 500
+    
+@app.route('/admin/shipments/<int:shipment_id>/status', methods=['POST'])
+@admin_required
+def admin_set_shipment_status(shipment_id):
+    try:
+        data = request.get_json(silent=True) or {}
+        new_status = str(data.get('status', '')).strip()
+
+        if new_status not in SHIPMENT_STATUSES:
+            return jsonify({'success': False, 'error': 'Недопустимый статус'}), 400
+
+        with db.get_cursor() as cursor:
+            row = cursor.execute(
+                "SELECT id, user_id, status FROM order_shipments WHERE id = ?",
+                (shipment_id,)
+            ).fetchone()
+            if not row:
+                return jsonify({'success': False, 'error': 'Посылка не найдена'}), 404
+
+            # Проверим, есть ли колонка updated_at
+            cols = cursor.execute("PRAGMA table_info(order_shipments)").fetchall()
+
+            def _colname(c):
+                # PRAGMA table_info returns (cid, name, type, notnull, dflt_value, pk)
+                return c['name'] if isinstance(c, dict) else c[1]
+
+            colnames = { _colname(c) for c in cols }
+
+            if 'updated_at' in colnames:
+                cursor.execute(
+                    "UPDATE order_shipments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (new_status, shipment_id)
+                )
+            else:
+                # Без updated_at — просто меняем статус
+                cursor.execute(
+                    "UPDATE order_shipments SET status = ? WHERE id = ?",
+                    (new_status, shipment_id)
+                )
+
+        return jsonify({
+            'success': True,
+            'shipment_id': shipment_id,
+            'status': new_status,
+            'status_label': SHIPMENT_STATUSES[new_status]
+        })
+    except Exception as e:
+        app.logger.exception("admin_set_shipment_status failed: %s", e)
+        # вернём расшифровку для дебага (можно оставить общую ошибку в проде)
+        return jsonify({'success': False, 'error': f'DB error: {type(e).__name__}: {e}'}), 500
 
 @app.route('/profile/shipments')
-def shipments():    
+def shipments():
+    if 'user' not in session:
+        return redirect(url_for('login'))  # опционально
     user_id = session['user']['id']
-    shipments_list = db.get_shipments_with_photos(user_id)
-    print(shipments_list)
-    
-    return render_template('profile/shipments.html', shipments=shipments_list)
 
+    shipments_list = db.get_shipments_with_photos(user_id) or []
+
+    # Нормализуем отсутствующие поля и приводим типы
+    for s in shipments_list:
+        # если это объект, превращать не нужно; если dict — безопасно
+        if isinstance(s, dict):
+            s.setdefault('packaging_cost', 0.0)
+            s.setdefault('packaging_paid', 0)
+            try:
+                s['packaging_cost'] = float(s.get('packaging_cost') or 0.0)
+            except Exception:
+                s['packaging_cost'] = 0.0
+            try:
+                s['packaging_paid'] = int(s.get('packaging_paid') or 0)
+            except Exception:
+                s['packaging_paid'] = 0
+
+    return render_template('profile/shipments.html', shipments=shipments_list)
     
 if __name__ == '__main__':
     with app.app_context():
         db.init_db()
-        if not db.get_user(name='admin1'):
-            db.create_admin('admin1', '123456')
-
+        if not db.get_user(name=ADMIN_USERNAME):
+            db.create_admin(ADMIN_USERNAME, ADMIN_PASSWORD)
+            
     start_cleanup_loop(db)
     app.run(host='0.0.0.0', debug=True)

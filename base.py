@@ -1165,106 +1165,226 @@ class Database:
 
     
     def get_shipments_with_photos(self, user_id):
-        with self.get_cursor() as cursor:
-            try:
-                # Получаем все посылки пользователя
+        import json, sqlite3, re
+
+        def _strict_parse_ids(val):
+            """Только JSON [1,2] или CSV '1,2,3'. Без регэкспов."""
+            if val is None:
+                return []
+            if isinstance(val, (list, tuple)):
+                out = []
+                for v in val:
+                    try:
+                        out.append(int(v))
+                    except Exception:
+                        pass
+                return out
+            s = str(val).strip()
+            if not s:
+                return []
+            # JSON массив
+            if s.startswith('[') and s.endswith(']'):
+                try:
+                    arr = json.loads(s)
+                    if isinstance(arr, (list, tuple)):
+                        return [int(x) for x in arr if str(x).strip().isdigit()]
+                except Exception:
+                    return []
+            # CSV из цифр
+            parts = [p.strip() for p in s.split(',') if p.strip()]
+            out = []
+            for p in parts:
+                if p.isdigit():
+                    out.append(int(p))
+            return out
+
+        def _repair_broken_ids(raw_str, valid_ids):
+            """
+            Чиним строки вида '[,1,2,,, ,1,3,]'.
+            Склеиваем 3- / 2- / 1-значные числа, если они существуют в valid_ids.
+            """
+            if not raw_str:
+                return []
+            digits = re.findall(r'\d', str(raw_str))
+            if not digits:
+                return []
+            s = ''.join(digits)  # например '1213'
+            out = []
+            i = 0
+            # Определим максимальную длину id в БД (обычно 1..6)
+            max_len = max((len(str(x)) for x in valid_ids), default=1)
+            max_len = min(max_len, 6)
+            while i < len(s):
+                taken = False
+                # сначала пробуем длинные окна
+                for L in range(min(max_len, len(s)-i), 0, -1):
+                    candidate = int(s[i:i+L])
+                    if candidate in valid_ids:
+                        out.append(candidate)
+                        i += L
+                        taken = True
+                        break
+                if not taken:
+                    i += 1
+            # убираем дубли, сохраняя порядок
+            seen = set()
+            res = []
+            for oid in out:
+                if oid not in seen:
+                    seen.add(oid)
+                    res.append(oid)
+            return res
+
+        # helper: безопасное получение из row
+        def g(row, key, idx):
+            if isinstance(row, dict):
+                return row.get(key)
+            return row[idx]
+
+        try:
+            with self.get_cursor() as cursor:
                 cursor.execute('''
                     SELECT 
-                        id, 
-                        model_ids, 
-                        recipient_city, 
-                        status, 
-                        created_at, 
-                        recipient_address, 
-                        total_weight
+                        id,
+                        model_ids,
+                        recipient_city,
+                        status,
+                        created_at,
+                        recipient_address,
+                        total_weight,
+                        our_tracking_number,
+                        delivery_method,
+                        packaging_cost,
+                        packaging_paid
                     FROM order_shipments
                     WHERE user_id = ?
-                    ORDER BY created_at DESC
+                    ORDER BY datetime(created_at) DESC
                 ''', (user_id,))
-                
-                shipments = cursor.fetchall()
-                if not shipments:
+                rows = cursor.fetchall()
+                if not rows:
                     return []
-                
-                # Собираем все order_ids из всех посылок
-                all_order_ids = set()
-                shipments_list = []
-                
-                for shipment in shipments:
-                    # Безопасное преобразование строки в список order_ids
-                    order_ids_str = shipment[1] or ""
-                    order_ids = []
-                    
-                    try:
-                        if order_ids_str:
-                            order_ids = [int(id_str) for id_str in order_ids_str.split(',')]
-                    except ValueError:
-                        print(f"Invalid order_ids format: {order_ids_str}")
-                        order_ids = []
-                    
-                    shipment_dict = {
-                        'id': shipment[0],
-                        'order_ids': order_ids,  # Сохраняем как список
-                        'recipient_city': shipment[2],
-                        'status': shipment[3],
-                        'created_at': shipment[4],
-                        'recipient_address': shipment[5],
-                        'total_weight': shipment[6],
-                        'photo_urls': []
-                    }
-                    shipments_list.append(shipment_dict)
-                    all_order_ids.update(order_ids)
-                
-                # Если нет заказов, возвращаем посылки без фото
-                if not all_order_ids:
-                    return shipments_list
-                
-                # Получаем фотографии для всех заказов одним запросом
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return []
+
+        shipments_list = []
+        all_order_ids = set()
+
+        for r in rows:
+            sid               = g(r, 'id', 0)
+            model_ids_raw     = g(r, 'model_ids', 1)
+            recipient_city    = g(r, 'recipient_city', 2)
+            status            = g(r, 'status', 3)
+            created_at        = g(r, 'created_at', 4)
+            recipient_address = g(r, 'recipient_address', 5)
+            total_weight      = g(r, 'total_weight', 6)
+            our_track         = g(r, 'our_tracking_number', 7)
+            delivery_method   = g(r, 'delivery_method', 8)
+            packaging_cost    = g(r, 'packaging_cost', 9)
+            packaging_paid    = g(r, 'packaging_paid', 10)
+
+            try:
+                sid = int(sid)
+            except Exception:
+                continue
+
+            # пробуем жёсткий парсер
+            order_ids = _strict_parse_ids(model_ids_raw)
+
+            # если пусто или подозрительно — чиним, сверяясь с валидными orders для пользователя
+            if not order_ids:
+                try:
+                    with self.get_cursor() as cursor:
+                        valid_ids_rows = cursor.execute(
+                            "SELECT id FROM orders WHERE user_id = ?",
+                            (user_id,)
+                        ).fetchall()
+                    valid_ids = { (x['id'] if isinstance(x, dict) else x[0]) for x in valid_ids_rows }
+                except Exception:
+                    valid_ids = set()
+                if valid_ids:
+                    order_ids = _repair_broken_ids(model_ids_raw, valid_ids)
+
+            # окончательно убираем дубли, сохраняя порядок
+            seen = set()
+            order_ids = [oid for oid in order_ids if (oid not in seen and not seen.add(oid))]
+
+            all_order_ids.update(order_ids)
+
+            try:
+                total_weight = float(total_weight) if total_weight is not None else None
+            except Exception:
+                total_weight = None
+
+            try:
+                packaging_cost = float(packaging_cost or 0.0)
+            except Exception:
+                packaging_cost = 0.0
+
+            try:
+                packaging_paid = int(packaging_paid or 0)
+            except Exception:
+                packaging_paid = 0
+
+            shipments_list.append({
+                'id': sid,
+                'order_ids': order_ids,
+                'recipient_city': recipient_city,
+                'recipient_address': recipient_address,
+                'status': status,
+                'created_at': created_at,
+                'total_weight': total_weight,
+                'our_tracking_number': our_track,
+                'delivery_method': delivery_method,
+                'packaging_cost': packaging_cost,
+                'packaging_paid': packaging_paid,
+                'photo_urls': []
+            })
+
+        if not all_order_ids:
+            return shipments_list
+
+        # подтягиваем фото по orders.id
+        try:
+            with self.get_cursor() as cursor:
                 placeholders = ','.join(['?'] * len(all_order_ids))
                 cursor.execute(f'''
                     SELECT 
                         o.id AS order_id,
                         m.image_url
                     FROM orders o
-                    JOIN models m ON o.model_id = m.id
+                    LEFT JOIN models m ON o.model_id = m.id
                     WHERE o.id IN ({placeholders})
                 ''', list(all_order_ids))
-                
-                order_photos = {}
-                for row in cursor.fetchall():
-                    order_id = row[0]
-                    image_url = row[1]
-                    
-                    # Если для одного заказа несколько фото (не должно быть, но для безопасности)
-                    if order_id not in order_photos:
-                        order_photos[order_id] = image_url
-                    else:
-                        # Если уже есть фото, добавляем как дополнительное
-                        if isinstance(order_photos[order_id], list):
-                            order_photos[order_id].append(image_url)
-                        else:
-                            order_photos[order_id] = [order_photos[order_id], image_url]
-                
-                # Добавляем фото к посылкам
-                for shipment in shipments_list:
-                    for order_id in shipment['order_ids']:
-                        if order_id in order_photos:
-                            photo = order_photos[order_id]
-                            
-                            # Обработка разных форматов хранения фото
-                            if isinstance(photo, list):
-                                shipment['photo_urls'].extend(photo)
-                            else:
-                                shipment['photo_urls'].append(photo)
-                    
-                    # Ограничиваем количество фото (например, первые 3)
-                    shipment['photo_urls'] = shipment['photo_urls']
-                
-                return shipments_list
-                
-            except sqlite3.Error as e:
-                print(f"Database error: {e}")
-                return []        
+                photo_rows = cursor.fetchall()
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            photo_rows = []
+
+        order_photos = {}
+        for pr in photo_rows:
+            if isinstance(pr, dict):
+                oid = pr.get('order_id')
+                url = pr.get('image_url')
+            else:
+                oid, url = pr[0], pr[1]
+            try:
+                oid = int(oid)
+            except Exception:
+                continue
+            if not url:
+                continue
+            order_photos.setdefault(oid, []).append(url)
+
+        # приклеиваем фото
+        for s in shipments_list:
+            photos = []
+            for oid in s['order_ids']:
+                photos.extend(order_photos.get(oid, []))
+            s['photo_urls'] = photos
+
+        return shipments_list
+      
                     
     def calculate_total_weight(self, order_ids):
         with self.get_cursor() as cursor:
@@ -1288,62 +1408,89 @@ class Database:
         import json, re
         from flask import current_app
 
-        # --- читаем посылки
+        # есть ли колонка packaging_paid
+        has_packaging_paid = False
         try:
             with self.get_cursor() as cursor:
-                cursor.execute('''
-                    SELECT
-                        id, user_id, model_ids, delivery_method, packaging_options,
-                        recipient_name, recipient_phone, recipient_city, recipient_address,
-                        total_weight, delivery_cost, packaging_cost, total_cost,
-                        our_tracking_number, created_at, status
+                cols = cursor.execute("PRAGMA table_info(order_shipments)").fetchall()
+            def _n(c): return (c.get('name') if isinstance(c, dict) else c[1])
+            has_packaging_paid = 'packaging_paid' in {_n(c) for c in cols}
+        except Exception:
+            pass
+
+        select_cols = """
+            id, user_id, model_ids, delivery_method, packaging_options,
+            recipient_name, recipient_phone, recipient_city, recipient_address,
+            total_weight, delivery_cost, packaging_cost, total_cost,
+            our_tracking_number, created_at, status
+        """
+        if has_packaging_paid:
+            select_cols += ", packaging_paid"
+
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(f'''
+                    SELECT {select_cols}
                     FROM order_shipments
-                    WHERE status = 'pending'
-                    ORDER BY created_at DESC
+                    -- не скрываем из админки: показываем все рабочие
+                    WHERE status IN ('pending','processing','shipped','delivered')
+                    ORDER BY datetime(created_at) DESC
                 ''')
                 rows = cursor.fetchall()
         except Exception as e:
-            current_app.logger.exception("Failed to fetch pending shipments: %s", e)
+            current_app.logger.exception("Failed to fetch shipments: %s", e)
             return []
 
-        def parse_ids_field(val):
+        def _strict_parse_ids(val):
             if val is None:
                 return []
-            if callable(val):
-                current_app.logger.warning("parse_ids_field: callable found, returning []")
-                return []
-            ids = []
             if isinstance(val, (list, tuple)):
+                out = []
                 for v in val:
-                    try: ids.append(int(v))
+                    try: out.append(int(v))
                     except Exception: pass
-                return ids
-            if isinstance(val, str):
-                s = val.strip()
-                if s.startswith('[') and s.endswith(']'):
-                    try:
-                        arr = json.loads(s)
-                        if isinstance(arr, (list, tuple)):
-                            for a in arr:
-                                try: ids.append(int(a))
-                                except Exception: pass
-                            return ids
-                    except Exception:
-                        pass
-                for p in re.split(r'\s*,\s*', s):
-                    if not p: continue
-                    try: ids.append(int(p))
-                    except Exception:
-                        m = re.search(r'(\d+)', p)
-                        if m:
-                            try: ids.append(int(m.group(1)))
-                            except Exception: pass
-                return ids
-            try: ids.append(int(val))
-            except Exception: pass
-            return ids
+                return out
+            s = str(val).strip()
+            if not s:
+                return []
+            if s.startswith('[') and s.endswith(']'):
+                try:
+                    arr = json.loads(s)
+                    if isinstance(arr, (list, tuple)):
+                        return [int(x) for x in arr if str(x).strip().isdigit()]
+                except Exception:
+                    return []
+            parts = [p.strip() for p in s.split(',') if p.strip()]
+            return [int(p) for p in parts if p.isdigit()]
 
-        # --- helper
+        def _repair_broken_ids(raw_str, valid_ids):
+            digits = re.findall(r'\d', str(raw_str))
+            if not digits:
+                return []
+            s = ''.join(digits)
+            out = []
+            i = 0
+            max_len = max((len(str(x)) for x in valid_ids), default=1)
+            max_len = min(max_len, 6)
+            while i < len(s):
+                taken = False
+                for L in range(min(max_len, len(s)-i), 0, -1):
+                    candidate = int(s[i:i+L])
+                    if candidate in valid_ids:
+                        out.append(candidate)
+                        i += L
+                        taken = True
+                        break
+                if not taken:
+                    i += 1
+            seen = set()
+            res = []
+            for oid in out:
+                if oid not in seen:
+                    seen.add(oid)
+                    res.append(oid)
+            return res
+
         def safe_get(row, key, idx):
             try:
                 if isinstance(row, dict):
@@ -1357,7 +1504,7 @@ class Database:
         for r in rows:
             sid                 = safe_get(r, 'id', 0)
             creator_user_id     = safe_get(r, 'user_id', 1)
-            model_ids_raw       = safe_get(r, 'model_ids', 2)   # тут хранятся orders.id
+            model_ids_raw       = safe_get(r, 'model_ids', 2)
             delivery_method     = safe_get(r, 'delivery_method', 3)
             packaging_raw       = safe_get(r, 'packaging_options', 4)
             recipient_name      = safe_get(r, 'recipient_name', 5)
@@ -1371,37 +1518,52 @@ class Database:
             our_tracking_number = safe_get(r, 'our_tracking_number', 13)
             created_at          = safe_get(r, 'created_at', 14)
             status              = safe_get(r, 'status', 15)
+            packaging_paid      = safe_get(r, 'packaging_paid', 16) if has_packaging_paid else 0
 
-            order_ids = parse_ids_field(model_ids_raw)
-            current_app.logger.debug("shipment %s parsed order_ids=%r", sid, order_ids)
+            # 1) строгий парс
+            order_ids = _strict_parse_ids(model_ids_raw)
 
+            # 2) если пусто — пытаемся чинить, сверяясь с заказами конкретного владельца посылки
+            valid_ids = set()
+            try:
+                with self.get_cursor() as cursor:
+                    rows_valid = cursor.execute(
+                        "SELECT id FROM orders WHERE user_id = ?",
+                        (creator_user_id,)
+                    ).fetchall()
+                valid_ids = { (x['id'] if isinstance(x, dict) else x[0]) for x in rows_valid }
+            except Exception:
+                pass
+
+            if (not order_ids) and valid_ids:
+                order_ids = _repair_broken_ids(model_ids_raw, valid_ids)
+
+            # 3) убираем дубли, сохраняем порядок
+            seen = set()
+            order_ids = [oid for oid in order_ids if (oid not in seen and not seen.add(oid))]
+
+            # 4) тянем товары только по orders.id
             items: List[Dict[str, Any]] = []
-
             if order_ids:
-                # --- определяем, какие поля есть в users
+                # какие поля есть у users
                 try:
                     with self.get_cursor() as cursor:
                         cols = cursor.execute("PRAGMA table_info(users)").fetchall()
-                    def _colname(c):
-                        # PRAGMA table_info returns (cid, name, type, notnull, dflt_value, pk)
-                        if isinstance(c, dict):
-                            return str(c.get('name'))
-                        return str(c[1])
-                    user_cols = { _colname(c) for c in cols }
+                    def _name(c): return (c.get('name') if isinstance(c, dict) else c[1])
+                    user_cols = {_name(c) for c in cols}
                 except Exception:
                     user_cols = set()
 
-                # подберём выражения с алиасами (если нет — вернём NULL)
                 def pick_user_expr(preferred, fallbacks, alias):
                     for col in ([preferred] + fallbacks):
                         if col in user_cols:
                             return f"u.{col} AS {alias}"
                     return f"NULL AS {alias}"
 
-                u_name_expr    = pick_user_expr('name', ['full_name', 'fullname', 'username', 'login'], 'u_name')
-                u_phone_expr   = pick_user_expr('phone', ['phone_number', 'tel', 'telephone', 'mobile'], 'u_phone')
-                u_city_expr    = pick_user_expr('city', ['town', 'locality'], 'u_city')
-                u_address_expr = pick_user_expr('address', ['addr', 'street', 'address_line'], 'u_address')
+                u_name_expr    = pick_user_expr('name', ['full_name','fullname','username','login'], 'u_name')
+                u_phone_expr   = pick_user_expr('phone', ['phone_number','tel','telephone','mobile'], 'u_phone')
+                u_city_expr    = pick_user_expr('city', ['town','locality'], 'u_city')
+                u_address_expr = pick_user_expr('address', ['addr','street','address_line'], 'u_address')
 
                 placeholders = ','.join(['?'] * len(order_ids))
                 sql = f"""
@@ -1436,7 +1598,6 @@ class Database:
                     LEFT JOIN users    u ON o.user_id = u.id
                     WHERE o.id IN ({placeholders})
                 """
-
                 try:
                     with self.get_cursor() as cursor:
                         order_rows = cursor.execute(sql, order_ids).fetchall()
@@ -1446,7 +1607,6 @@ class Database:
 
                 def _asdict(row):
                     return dict(row) if isinstance(row, dict) else {
-                        # Порядок алиасов совпадает с SELECT
                         'order_id'            : row[0],
                         'buyer_id'            : row[1],
                         'model_id'            : row[2],
@@ -1474,12 +1634,11 @@ class Database:
                 by_oid = { int(x['order_id']): x for x in order_rows if x.get('order_id') is not None }
 
                 for oid in order_ids:
-                    r0 = by_oid.get(int(oid))
+                    r0 = by_oid.get(oid)
                     if r0:
-                        model_id_val = int(r0['model_id']) if r0.get('model_id') is not None else None
                         items.append({
-                            'order_id': int(r0['order_id']),
-                            'model_id': model_id_val,
+                            'order_id': oid,
+                            'model_id': (int(r0['model_id']) if r0.get('model_id') is not None else None),
                             'product_title': r0.get('product_title'),
                             'quantity': (int(r0['quantity']) if r0.get('quantity') is not None else None),
                             'weight': (float(r0['weight']) if r0.get('weight') is not None else None),
@@ -1504,7 +1663,7 @@ class Database:
                         })
                     else:
                         items.append({
-                            'order_id': int(oid),
+                            'order_id': oid,
                             'model_id': None,
                             'product_title': None,
                             'quantity': None,
@@ -1517,8 +1676,8 @@ class Database:
                             'found': False
                         })
 
-            # packaging parse
-            if packaging_raw is None or callable(packaging_raw):
+            # packaging_options
+            if packaging_raw is None:
                 packaging_options = None
             elif isinstance(packaging_raw, (list, tuple)):
                 packaging_options = [str(x) for x in packaging_raw]
@@ -1529,16 +1688,23 @@ class Database:
                         parsed = json.loads(s)
                         packaging_options = [str(x) for x in parsed] if isinstance(parsed, (list, tuple)) else [s]
                     except Exception:
-                        packaging_options = [p for p in re.split(r'\s*,\s*', s) if p]
+                        packaging_options = [p for p in s.split(',') if p.strip()]
                 else:
-                    packaging_options = [p for p in re.split(r'\s*,\s*', s) if p]
+                    packaging_options = [p for p in s.split(',') if p.strip()]
             else:
                 packaging_options = None
 
+            def to_int(v, d=None):
+                try: return int(v)
+                except Exception: return d
+            def to_float(v, d=None):
+                try: return float(v)
+                except Exception: return d
+
             shipments.append({
-                'id': (int(sid) if sid is not None else None),
-                'creator_user_id': (int(creator_user_id) if creator_user_id is not None else None),
-                'model_ids': order_ids,  # оставляем имя поля для совместимости (это именно order_ids)
+                'id': to_int(sid),
+                'creator_user_id': to_int(creator_user_id),
+                'model_ids': order_ids,
                 'items': items,
                 'delivery_method': (str(delivery_method) if delivery_method is not None else None),
                 'packaging_options': packaging_options,
@@ -1546,10 +1712,11 @@ class Database:
                 'recipient_phone': recipient_phone,
                 'recipient_city': recipient_city,
                 'recipient_address': recipient_address,
-                'total_weight': (float(total_weight) if total_weight is not None else None),
-                'delivery_cost': (float(delivery_cost) if delivery_cost is not None else None),
-                'packaging_cost': (float(packaging_cost) if packaging_cost is not None else None),
-                'total_cost': (float(total_cost) if total_cost is not None else None),
+                'total_weight': to_float(total_weight),
+                'delivery_cost': to_float(delivery_cost),
+                'packaging_cost': to_float(packaging_cost, 0.0),
+                'packaging_paid': to_int(packaging_paid, 0),
+                'total_cost': to_float(total_cost),
                 'our_tracking_number': (str(our_tracking_number) if our_tracking_number is not None else None),
                 'created_at': created_at,
                 'status': (str(status) if status is not None else None)

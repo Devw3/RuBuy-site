@@ -138,6 +138,35 @@
                                             <span class="detail-label">Общий вес:</span>
                                             <span class="detail-value">{{ shipment.total_weight }} кг</span>
                                         </div>
+
+                                        {% set pkg_cost = (shipment.get('packaging_cost', 0) | float) %}
+                                        {% set pkg_paid = (shipment.get('packaging_paid', 0) | int) %}
+
+                                        <div class="detail-row">
+                                          <span class="detail-label">Упаковка:</span>
+                                          <span class="detail-value">
+                                            {% if pkg_cost > 0 %}
+                                              {{ "%.2f"|format(pkg_cost) }} CNY
+                                              {% if pkg_paid %}
+                                                <span style="margin-left:8px;color:#2e7d32;background:#e6f4ea;padding:3px 8px;border-radius:6px;font-weight:600;font-size:12px;">
+                                                  Оплачено
+                                                </span>
+                                              {% else %}
+                                                <button
+                                                  class="btn-pay-packaging"
+                                                  data-shipment-id="{{ shipment.id }}"
+                                                  data-amount="{{ "%.2f"|format(pkg_cost) }}"
+                                                  style="margin-left:10px;padding:8px 12px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-weight:600;cursor:pointer;"
+                                                >
+                                                  Оплатить упаковку
+                                                </button>
+                                              {% endif %}
+                                            {% else %}
+                                              Не выставлена
+                                            {% endif %}
+                                          </span>
+                                        </div>
+
                                     </div>
                                 </div>
                                 
@@ -199,191 +228,217 @@
             </div>
         </div>
     </div>
-    
-    <script>
-        // Глобальные переменные
-        let currentPhotoIndex = 0;
-        let currentPhotos = [];
+<script>
+(() => {
+  // --- Конфиг (Jinja подставит URL) ---
+  const PAY_PACKAGING_URL = '{{ url_for("pay_packaging") }}' || '/pay-packaging';
 
-        // Открыть одиночный модал с фотографией
-        function openPhotoModal(photos, index) {
-            if (!Array.isArray(photos)) {
-                // Если пришла строка - пробуем распарсить
-                try {
-                    photos = JSON.parse(photos);
-                } catch (err) {
-                    console.error('Invalid photos data:', photos);
-                    photos = [];
-                }
-            }
+  // --- Состояние для модалок фото ---
+  let currentPhotoIndex = 0;
+  let currentPhotos = [];
 
-            if (!Array.isArray(photos) || photos.length === 0) {
-                console.warn('Нет фотографий для отображения');
-                return;
-            }
+  // --- Утилиты ---
+  function parsePhotosAttr(photos) {
+    if (Array.isArray(photos)) return photos.filter(Boolean);
+    if (typeof photos === 'string') {
+      const s = photos.trim();
+      if (!s) return [];
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        if (typeof parsed === 'string' && parsed) return [parsed];
+      } catch (_) {}
+      if (s.includes(',')) return s.split(',').map(x => x.trim()).filter(Boolean);
+      return [s];
+    }
+    return [];
+  }
+  function setBodyScrollDisabled(disabled) {
+    document.body.style.overflow = disabled ? 'hidden' : 'auto';
+  }
+  const $ = sel => document.querySelector(sel);
+  const $all = sel => Array.from(document.querySelectorAll(sel));
 
-            // Защита от выхода за границы
-            index = Number(index) || 0;
-            index = Math.max(0, Math.min(index, photos.length - 1));
+  // --- Одиночный модал фото ---
+  function openPhotoModal(photos, index = 0) {
+    const list = parsePhotosAttr(photos);
+    if (!list.length) return;
+    const modal = $('#photoModal');
+    const modalImg = $('#modalPhoto');
+    const counter = $('#imageCounter');
+    if (!modal || !modalImg || !counter) return;
 
-            const modal = document.getElementById('photoModal');
-            const modalImg = document.getElementById('modalPhoto');
-            const counter = document.getElementById('imageCounter');
+    currentPhotos = list;
+    currentPhotoIndex = Math.max(0, Math.min(Number(index) || 0, currentPhotos.length - 1));
+    modalImg.src = currentPhotos[currentPhotoIndex];
+    counter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
+    modal.style.display = 'block';
+    modal.setAttribute('aria-hidden', 'false');
+    setBodyScrollDisabled(true);
+  }
+  function navigatePhoto(direction) {
+    if (!currentPhotos.length) return;
+    currentPhotoIndex += direction;
+    if (currentPhotoIndex < 0) currentPhotoIndex = currentPhotos.length - 1;
+    if (currentPhotoIndex >= currentPhotos.length) currentPhotoIndex = 0;
+    const modalImg = $('#modalPhoto');
+    const counter = $('#imageCounter');
+    if (!modalImg || !counter) return;
+    modalImg.style.opacity = 0;
+    setTimeout(() => {
+      modalImg.src = currentPhotos[currentPhotoIndex];
+      counter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
+      modalImg.style.opacity = 1;
+    }, 80);
+  }
+  function closePhotoModal() {
+    const modal = $('#photoModal');
+    const modalImg = $('#modalPhoto');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    currentPhotos = [];
+    currentPhotoIndex = 0;
+    if (modalImg) modalImg.src = '';
+    setBodyScrollDisabled(false);
+  }
 
-            currentPhotos = photos;
-            currentPhotoIndex = index;
+  // --- Сетка фото ---
+  function openPhotoGrid(photos) {
+    const list = parsePhotosAttr(photos);
+    const modal = $('#photoGridModal');
+    const gridContainer = $('#photosGrid');
+    const photoCount = $('#photoCount');
+    if (!modal || !gridContainer || !photoCount) return;
 
-            modalImg.src = currentPhotos[currentPhotoIndex];
-            counter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
+    gridContainer.innerHTML = '';
+    if (!list.length) {
+      gridContainer.innerHTML = '<div style="color:#ddd">Нет фотографий</div>';
+      photoCount.textContent = '0';
+    } else {
+      list.forEach((photo, index) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'grid-photo-item';
+        wrap.innerHTML = `
+          <img loading="lazy" src="${photo}" alt="Фото товара ${index + 1}">
+          <div class="photo-counter">${index + 1}</div>
+        `;
+        wrap.addEventListener('click', () => openPhotoModal(list, index));
+        gridContainer.appendChild(wrap);
+      });
+      photoCount.textContent = String(list.length);
+    }
 
-            modal.style.display = 'block';
-            modal.setAttribute('aria-hidden', 'false');
+    modal.style.display = 'block';
+    modal.setAttribute('aria-hidden', 'false');
+    setBodyScrollDisabled(true);
+  }
+  function closePhotoGrid() {
+    const modal = $('#photoGridModal');
+    const gridContainer = $('#photosGrid');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    if (gridContainer) gridContainer.innerHTML = '';
+    setBodyScrollDisabled(false);
+  }
 
-            // блокируем скролл страницы
-            document.body.style.overflow = 'hidden';
-        }
+  // --- Оплата упаковки ---
+  async function payPackaging(shipmentId, amount, btn) {
+    try {
+      if (!shipmentId) return;
+      if (!confirm(`С вашего CNY-баланса будет списано ${amount} CNY за упаковку. Подтвердить?`)) return;
+      if (btn) btn.disabled = true;
 
-        // Навигация по фото
-        function navigatePhoto(direction) {
-            if (!Array.isArray(currentPhotos) || currentPhotos.length === 0) return;
+      const resp = await fetch(PAY_PACKAGING_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shipment_id: Number(shipmentId) })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data || data.success !== true) {
+        alert((data && data.error) ? data.error : 'Не удалось оплатить упаковку');
+        if (btn) btn.disabled = false;
+        return;
+      }
+      location.reload();
+    } catch (err) {
+      console.error(err);
+      alert('Сетевая ошибка');
+      if (btn) btn.disabled = false;
+    }
+  }
 
-            currentPhotoIndex += direction;
+  // --- Навешивание обработчиков ---
+  document.addEventListener('DOMContentLoaded', () => {
+    // Миниатюры → одиночный модал
+    $all('.shipment-photo').forEach(img => {
+      img.addEventListener('click', () => {
+        const photosData = img.getAttribute('data-photos');
+        const index = img.getAttribute('data-index') || 0;
+        openPhotoModal(photosData, index);
+      });
+    });
 
-            if (currentPhotoIndex < 0) currentPhotoIndex = currentPhotos.length - 1;
-            if (currentPhotoIndex >= currentPhotos.length) currentPhotoIndex = 0;
+    // «Просмотреть все фото» → сетка
+    $all('.view-all-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const photosData = btn.getAttribute('data-photos');
+        openPhotoGrid(photosData);
+      });
+    });
 
-            const modalImg = document.getElementById('modalPhoto');
-            const counter = document.getElementById('imageCounter');
+    // Закрытия/навигация модалок
+    const modalClose = $('#modalClose'); if (modalClose) modalClose.addEventListener('click', closePhotoModal);
+    const gridClose  = $('#gridClose');  if (gridClose)  gridClose.addEventListener('click', closePhotoGrid);
+    const prevBtn    = $('#prevBtn');    if (prevBtn)    prevBtn.addEventListener('click', () => navigatePhoto(-1));
+    const nextBtn    = $('#nextBtn');    if (nextBtn)    nextBtn.addEventListener('click', () => navigatePhoto(1));
 
-            // Плавный переход: скрываем, меняем src, показываем
-            modalImg.style.opacity = 0;
-            setTimeout(() => {
-                modalImg.src = currentPhotos[currentPhotoIndex];
-                counter.textContent = `${currentPhotoIndex + 1} / ${currentPhotos.length}`;
-                modalImg.style.opacity = 1;
-            }, 80);
-        }
+    // Оплата упаковки (оба варианта разметки)
+    const mountPayHandler = (btn) => {
+      btn.addEventListener('click', () => {
+        const shipmentId = btn.getAttribute('data-shipment-id');
+        const amount = btn.getAttribute('data-amount') || '0.00';
+        payPackaging(shipmentId, amount, btn);
+      });
+    };
+    $all('[data-action="pay-packaging"]').forEach(mountPayHandler);
+    $all('.btn-pay-packaging').forEach(mountPayHandler);
+  });
 
-        // Закрыть одиночный модал
-        function closePhotoModal() {
-            const modal = document.getElementById('photoModal');
-            modal.style.display = 'none';
-            modal.setAttribute('aria-hidden', 'true');
-            currentPhotos = [];
-            currentPhotoIndex = 0;
-            document.getElementById('modalPhoto').src = '';
-            document.body.style.overflow = 'auto';
-        }
+  // Закрытие модалок кликом по фону
+  window.addEventListener('click', (e) => {
+    const photoModal = $('#photoModal');
+    const gridModal  = $('#photoGridModal');
+    if (photoModal && e.target === photoModal) closePhotoModal();
+    if (gridModal  && e.target === gridModal)  closePhotoGrid();
+  });
 
-        // Открыть сетку фото (grid modal)
-        function openPhotoGrid(photos) {
-            if (!Array.isArray(photos)) {
-                try {
-                    photos = JSON.parse(photos);
-                } catch (err) {
-                    console.error('Invalid photos data for grid:', photos);
-                    photos = [];
-                }
-            }
+  // Горячие клавиши
+  document.addEventListener('keydown', (e) => {
+    const photoModal = $('#photoModal');
+    const gridModal  = $('#photoGridModal');
+    const photoShown = photoModal && photoModal.style.display === 'block';
+    const gridShown  = gridModal  && gridModal.style.display === 'block';
+    if (e.key === 'Escape') {
+      if (photoShown) closePhotoModal();
+      if (gridShown)  closePhotoGrid();
+    } else if (photoShown) {
+      if (e.key === 'ArrowLeft')  { navigatePhoto(-1); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { navigatePhoto(1);  e.preventDefault(); }
+    }
+  });
 
-            const modal = document.getElementById('photoGridModal');
-            const gridContainer = document.getElementById('photosGrid');
-            const photoCount = document.getElementById('photoCount');
-
-            gridContainer.innerHTML = '';
-
-            if (!Array.isArray(photos) || photos.length === 0) {
-                gridContainer.innerHTML = '<div style="color:#ddd">Нет фотографий</div>';
-                photoCount.textContent = '0';
-            } else {
-                photos.forEach((photo, index) => {
-                    const photoItem = document.createElement('div');
-                    photoItem.className = 'grid-photo-item';
-                    photoItem.innerHTML = `
-                        <img loading="lazy" src="${photo}" alt="Фото товара ${index + 1}">
-                        <div class="photo-counter">${index + 1}</div>
-                    `;
-                    photoItem.addEventListener('click', () => {
-                        openPhotoModal(photos, index);
-                    });
-                    gridContainer.appendChild(photoItem);
-                });
-                photoCount.textContent = photos.length;
-            }
-
-            modal.style.display = 'block';
-            modal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closePhotoGrid() {
-            const modal = document.getElementById('photoGridModal');
-            modal.style.display = 'none';
-            modal.setAttribute('aria-hidden', 'true');
-            document.getElementById('photosGrid').innerHTML = '';
-            document.body.style.overflow = 'auto';
-        }
-
-        // Привязка обработчиков после загрузки DOM
-        document.addEventListener('DOMContentLoaded', () => {
-            // Клик по миниатюре: используем data-attributes
-            document.querySelectorAll('.shipment-photo').forEach(img => {
-                img.addEventListener('click', (e) => {
-                    const photosData = img.getAttribute('data-photos');
-                    const index = img.getAttribute('data-index') || 0;
-                    openPhotoModal(photosData, index);
-                });
-            });
-
-            // Кнопки "Просмотреть все фото"
-            document.querySelectorAll('.view-all-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const photosData = btn.getAttribute('data-photos');
-                    openPhotoGrid(photosData);
-                });
-            });
-
-            // Закрытие модалей
-            document.getElementById('modalClose').addEventListener('click', closePhotoModal);
-            document.getElementById('gridClose').addEventListener('click', closePhotoGrid);
-
-            // Навигационные кнопки в модале
-            document.getElementById('prevBtn').addEventListener('click', () => navigatePhoto(-1));
-            document.getElementById('nextBtn').addEventListener('click', () => navigatePhoto(1));
-        });
-
-        // Закрытие кликом по фону
-        window.addEventListener('click', (event) => {
-            const modal = document.getElementById('photoModal');
-            const gridModal = document.getElementById('photoGridModal');
-
-            if (event.target === modal) closePhotoModal();
-            if (event.target === gridModal) closePhotoGrid();
-        });
-
-        // Клавиши
-        document.addEventListener('keydown', (e) => {
-            const modal = document.getElementById('photoModal');
-            const gridModal = document.getElementById('photoGridModal');
-
-            if (e.key === 'Escape') {
-                if (modal.style.display === 'block') closePhotoModal();
-                if (gridModal.style.display === 'block') closePhotoGrid();
-            } else if (modal.style.display === 'block') {
-                if (e.key === 'ArrowLeft') { navigatePhoto(-1); e.preventDefault(); }
-                if (e.key === 'ArrowRight') { navigatePhoto(1); e.preventDefault(); }
-            }
-        });
-
-        // Фильтрация кнопки (заглушка)
-        document.addEventListener('click', (e) => {
-            if (e.target.classList && e.target.classList.contains('filter-btn')) {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                // Реальную фильтрацию можно добавить здесь
-                console.log('Применен фильтр:', e.target.dataset.filter);
-            }
-        });
-    </script>
+  // Фильтрация (если есть .filter-btn)
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+})();
+</script>
 </body>
 </html>

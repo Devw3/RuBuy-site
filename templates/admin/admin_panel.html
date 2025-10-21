@@ -4,388 +4,242 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Финансы - Админ-панель</title>
-    <style>
-        :root {
-            --primary-color: #4361ee;
-            --primary-dark: #3a0ca3;
-            --secondary-color: #4cc9f0;
-            --dark-color: #2b2d42;
-            --light-color: #f8f9fa;
-            --success-color: #2ecc71;
-            --danger-color: #e74c3c;
-            --warning-color: #f39c12;
-            --gray-color: #adb5bd;
-            --light-gray: #e9ecef;
-            --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            --transition: all 0.3s ease;
-        }
+<style>
+:root{
+  /* ===== WHITE–RED (light) — high-contrast ===== */
+  --bg:#ffffff;
+  --panel:#ffffff;
+  --panel-2:#fafafa;
+  --text:#0b0d12;
+  --muted:#5a5f6a;
+  --brand:#dc2626;   /* red */
+  --brand-2:#991b1b; /* deep red */
+  --ok:#16a34a;
+  --warn:#d97706;
+  --bad:#dc2626;
+  --border:#e6e7ee;
+  --ring:#fecaca;
+  --chip:#fff1f2;
+  --chip-text:#7f1d1d;
+  --table-stripe:#fff6f6;
+  --link:#b91c1c;
+  --head:#0b0d12;
+}
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        }
+@media (prefers-color-scheme: dark){
+  /* если у пользователя включена тёмная тема — всё равно оставляем светлую,
+     чтобы админка всегда была бело-красной и читабельной */
+  :root{
+    --bg:#ffffff;
+    --panel:#ffffff;
+    --panel-2:#fafafa;
+    --text:#0b0d12;
+    --muted:#5a5f6a;
+    --brand:#dc2626;
+    --brand-2:#991b1b;
+    --ok:#16a34a;
+    --warn:#d97706;
+    --bad:#dc2626;
+    --border:#e6e7ee;
+    --ring:#fecaca;
+    --chip:#fff1f2;
+    --chip-text:#7f1d1d;
+    --table-stripe:#fff6f6;
+    --link:#b91c1c;
+    --head:#0b0d12;
+  }
+}
 
-        body {
-            background-color: #f5f7fa;
-            color: var(--dark-color);
-            line-height: 1.6;
-        }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
 
-        .admin-container {  
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+/* ===== layout & header ===== */
+.container,.admin-container{max-width:1280px;margin:28px auto;padding:0 18px}
+.header,.admin-header{display:flex;align-items:flex-end;justify-content:space-between;margin:8px 0 20px}
+.header .title,.admin-title{font-size:24px;font-weight:800;letter-spacing:.2px;color:var(--head)}
+.header .subtitle{color:var(--muted);font-size:13px}
 
-        .admin-header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid var(--light-gray);
-        }
+/* ===== links ===== */
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
 
-        .admin-title {
-            color: var(--dark-color);
-            margin-bottom: 10px;
-            font-size: 2rem;
-            font-weight: 700;
-        }
+/* ===== tabs ===== */
+.tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.tab-btn{
+  background:var(--panel);color:var(--text);
+  border:1px solid var(--border);padding:10px 14px;border-radius:12px;
+  cursor:pointer;transition:.2s ease;font-weight:700;
+}
+.tab-btn:hover{transform:translateY(-1px);border-color:#f1a1a1;box-shadow:0 6px 18px -12px rgba(220,38,38,.18)}
+.tab-btn.active{
+  background:linear-gradient(180deg,var(--brand),var(--brand-2));
+  border-color:transparent;color:#fff;box-shadow:0 10px 26px -12px rgba(220,38,38,.35)
+}
+.tab-content{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:16px}
 
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 25px;
-            border-bottom: 1px solid var(--light-gray);
-            padding-bottom: 10px;
-        }
+/* ===== cards ===== */
+.card{
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:16px;padding:20px;box-shadow:0 12px 30px -20px rgba(0,0,0,.08);
+}
+.card h3{margin:0 0 14px;font-size:19px;color:var(--head)}
+.card .muted{color:var(--muted)}
 
-        .tab-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px 8px 0 0;
-            cursor: pointer;
-            background: none;
-            font-weight: 600;
-            color: var(--gray-color);
-            transition: var(--transition);
-        }
+/* ===== tables ===== */
+table{width:100%;border-collapse:separate;border-spacing:0}
+thead th{
+  position:sticky;top:0;z-index:1;background:var(--panel-2);
+  color:#1a1c22;text-align:left;font-weight:900;
+  font-size:12.5px;letter-spacing:.35px;text-transform:uppercase;
+  padding:12px 14px;border-bottom:1px solid var(--border)
+}
+tbody td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+tbody tr:hover{background:#fff7f7}
+.no-data,.error{color:var(--muted);text-align:center;padding:16px}
 
-        .tab-btn.active {
-            color: var(--primary-color);
-            background-color: white;
-            box-shadow: var(--card-shadow);
-        }
+/* zebra for dense tables */
+.shipments-table tbody tr:nth-child(odd){background:transparent}
+.shipments-table tbody tr:nth-child(even){background:var(--table-stripe)}
+.shipment-details-row td{background:var(--panel-2)!important;border-bottom:none}
 
-        .tab-btn:hover:not(.active) {
-            color: var(--dark-color);
-        }
+/* выравнивание чисел */
+td[data-th*="Вес"], td[data-th*="Цена"], td[data-th*="CNY"], td[data-th*="USD"],
+td:nth-child(5), td:nth-child(6){text-align:right;font-variant-numeric:tabular-nums}
 
-        .card {
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: var(--card-shadow);
-            overflow: hidden;
-            margin-bottom: 30px;
-        }
+/* ===== buttons ===== */
+button,.btn{
+  background:#fff;color:var(--text);
+  border:1px solid var(--border);padding:10px 14px;border-radius:12px;
+  font-weight:800;cursor:pointer;transition:.2s ease;user-select:none;
+}
+button:hover,.btn:hover{transform:translateY(-1px);border-color:#f1a1a1;box-shadow:0 10px 22px -18px rgba(220,38,38,.25)}
+button:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
 
-        .replenishments-table, .withdrawals-table, .orders-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
+.btn-approve{background:#ecfdf5;border-color:#bbf7d0;color:#047857}
+.btn-reject{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+.btn-details,.btn-show-shipment-details{background:#fff1f2;color:#7f1d1d;border-color:#ffe4e6}
+.btn-primary,.btn-set-packaging,.btn-set-status,.btn-save-status,.btn-save-weight,.btn-save-cn-price{
+  background:linear-gradient(180deg,var(--brand),var(--brand-2));
+  border-color:transparent;color:#fff
+}
 
-        .replenishments-table th, 
-        .replenishments-table td,
-        .withdrawals-table th,
-        .withdrawals-table td,
-        .orders-table th,
-        .orders-table td {
-            padding: 15px 20px;
-            text-align: left;
-            border-bottom: 1px solid var(--light-gray);
-        }
+/* ===== inputs / selects ===== */
+input[type="text"],input[type="number"],input[type="search"],input[type="url"],textarea,select{
+  width:100%;max-width:520px;background:#ffffff;color:var(--text);
+  border:1px solid var(--border);border-radius:12px;padding:10px 12px;outline:none;transition:.2s ease;
+  box-shadow:inset 0 1px 0 rgba(0,0,0,.02);
+}
+input::placeholder,textarea::placeholder{color:#8b90a0}
+textarea{min-height:120px}
+input:focus,textarea:focus,select:focus{border-color:#ef9a9a;box-shadow:0 0 0 4px rgba(220,38,38,.15)}
+select{max-width:360px}
+.packaging-input{max-width:180px}
 
-        .replenishments-table th,
-        .withdrawals-table th,
-        .orders-table th {
-            background-color: var(--light-gray);
-            color: var(--dark-color);
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 0.5px;
-        }
+/* групповые контролы (поле + кнопка) */
+.input-group{display:flex;align-items:center}
+.input-group > input{border-right:none;border-radius:12px 0 0 12px}
+.input-group > .btn{border-radius:0 12px 12px 0}
 
-        .replenishments-table tr:hover,
-        .withdrawals-table tr:hover,
-        .orders-table tr:hover {
-            background-color: rgba(67, 97, 238, 0.05);
-        }
+/* ===== badges / status ===== */
+.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:12.5px;border:1px solid var(--border);background:#fff7f7;color:#7f1d1d}
+.badge-paid{background:#ecfdf5;color:#047857;border-color:#bbf7d0;padding:4px 10px;border-radius:999px;font-weight:900}
+.badge-unpaid{background:#fff7ed;color:#b45309;border-color:#fed7aa;padding:4px 10px;border-radius:999px;font-weight:900}
 
-        .status-pending {
-            color: var(--warning-color);
-            font-weight: 600;
-        }
+.status-pending{color:#6b7280}
+.status-processing{color:#dc2626}
+.status-packed{color:#c2410c}
+.status-in_transit,.status-shipped{color:#b45309}
+.status-delivered{color:#047857}
+.status-canceled{color:#991b1b}
 
-        .status-approved {
-            color: var(--success-color);
-            font-weight: 600;
-        }
+/* ===== photo grids / thumbnails ===== */
+.photo-list{display:flex;flex-wrap:wrap;gap:10px}
+.photo-item{position:relative}
+.photo-item img{border-radius:12px;border:1px solid var(--border);max-width:160px;max-height:160px}
+.btn-remove-photo{position:absolute;top:6px;right:6px}
 
-        .status-rejected {
-            color: var(--danger-color);
-            font-weight: 600;
-        }
+/* ===== modals (single + grid) ===== */
+#photoModal,#photoGridModal{
+  display:none; position:fixed; inset:0; z-index:1000;
+  background:rgba(0,0,0,.45); backdrop-filter: blur(2px);
+}
+.modal-inner{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:var(--panel); border:1px solid var(--border); border-radius:18px;
+  padding:16px; width:min(96vw,1100px); max-height:90vh; overflow:auto;
+  box-shadow:0 28px 70px -28px rgba(0,0,0,.2)
+}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.modal-title{font-weight:900;color:var(--head)}
+.modal-actions{display:flex;align-items:center;gap:10px}
+.modal-actions .btn{padding:8px 12px}
+#modalPhoto{max-width:100%;max-height:70vh;border-radius:14px;transition:opacity .08s ease}
 
-        .status-processing {
-            color: var(--warning-color);
-            font-weight: 600;
-        }
+/* ===== toolbars / filters ===== */
+.toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:10px 0 16px}
+.filter-btn{background:transparent;border:1px dashed var(--border);color:var(--muted)}
+.filter-btn.active{background:#fff1f2;color:#7f1d1d;border-style:solid}
 
-        .status-shipped {
-            color: var(--primary-color);
-            font-weight: 600;
-        }
+/* ===== utilities ===== */
+.row{display:flex;gap:14px;flex-wrap:wrap}
+.space-between{display:flex;justify-content:space-between;align-items:center}
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}.mt-20{margin-top:20px}
+.p-8{padding:8px}.p-12{padding:12px}.p-16{padding:16px}
+.round{border-radius:12px}
+hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 
-        .status-delivered {
-            color: var(--success-color);
-            font-weight: 600;
-        }
+/* ===== responsive (stacked table on mobile) ===== */
+@media (max-width:980px){
+  thead{display:none}
+  table, tbody, tr, td {display:block;width:100%}
+  tbody tr{margin-bottom:12px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff}
+  tbody td{display:flex;justify-content:space-between;gap:12px;padding:12px 14px}
+  tbody td:before{content:attr(data-th);color:var(--muted);font-weight:800}
+  .shipment-details-row td{padding:0}
+  .shipment-details{padding:14px}
+}
 
-        .status-cancelled {
-            color: var(--danger-color);
-            font-weight: 600;
-        }
+/* ===== OVERRIDES for photo upload instructions ===== */
+.photo-upload-box > div:first-child{
+  background:var(--panel-2) !important;
+  color:var(--text) !important;
+  border:1px solid var(--border) !important;
+  border-radius:14px !important;
+}
+.photo-upload-box > div:first-child ol,
+.photo-upload-box > div:first-child p,
+.photo-upload-box > div:first-child strong{color:var(--text) !important}
+.photo-upload-box > div:first-child a{color:var(--link) !important}
 
-        .action-btn {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-right: 5px;
-            font-weight: 500;
-            transition: var(--transition);
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
+.photo-upload-box .photo-url-input{
+  background:#ffffff !important;color:var(--text) !important;
+  border:1px solid var(--border) !important;border-right:none !important;
+  border-radius:12px 0 0 12px !important;
+}
+.photo-upload-box .btn-add-photo{
+  background:linear-gradient(180deg,var(--brand),var(--brand-2)) !important;
+  color:#fff !important;border:none !important;border-radius:0 12px 12px 0 !important;
+  padding:10px 16px !important;
+}
 
-        .btn-approve {
-            background-color: var(--success-color);
-            color: white;
-        }
+/* чтобы вложенные div с inline-стилями не белели без границ */
+.photo-upload-box div { background:var(--panel-2) !important; border:1px solid var(--border) !important; border-radius:12px !important; padding:10px !important }
 
-        .btn-approve:hover {
-            background-color: #27ae60;
-        }
+/* подсветка полей в деталях заказа/посылки */
+.order-details-row{background:var(--panel-2)!important}
+.order-details .detail-item{margin:6px 0}
+.shipment-status-admin .detail-label, .packaging-admin .detail-label{color:var(--muted)}
 
-        .btn-reject {
-            background-color: var(--danger-color);
-            color: white;
-        }
-
-        .btn-reject:hover {
-            background-color: #c0392b;
-        }
-
-        .btn-view {
-            background-color: var(--primary-color);
-            color: white;
-            text-decoration: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .btn-view:hover {
-            background-color: var(--primary-dark);
-            color: white;
-        }
-
-        .btn-details {
-            background-color: var(--secondary-color);
-            color: var(--dark-color);
-        }
-
-        .btn-details:hover {
-            background-color: #3aa8d8;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            font-style: italic;
-            color: var(--gray-color);
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: var(--card-shadow);
-        }
-
-        .no-data {
-            text-align: center;
-            padding: 30px;
-            color: var(--gray-color);
-            font-style: italic;
-        }
-
-        /* Стили для модального окна */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
-        .modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 25px;
-            border-radius: 12px;
-            width: 80%;
-            max-width: 900px;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        }
-
-        .modal-close {
-            color: var(--gray-color);
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .modal-close:hover {
-            color: var(--dark-color);
-        }
-
-        .modal-title {
-            margin-bottom: 20px;
-            color: var(--dark-color);
-            font-size: 1.5rem;
-        }
-
-        .order-meta {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid var(--light-gray);
-        }
-
-        .meta-item {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .meta-item strong {
-            margin-bottom: 5px;
-            font-size: 0.9rem;
-            color: var(--gray-color);
-        }
-
-        .order-items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-
-        .order-items-table th {
-            background-color: var(--light-gray);
-            padding: 12px 15px;
-            text-align: left;
-            font-size: 0.8rem;
-        }
-
-        .order-items-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid var(--light-gray);
-        }
-
-        .order-items-table tr:last-child td {
-            border-bottom: none;
-        }
-
-        /* Стили для раскрывающихся деталей заказа */
-        .order-details {
-            display: none;
-            padding: 15px;
-            background-color: var(--light-gray);
-            border-radius: 0 0 8px 8px;
-        }
-
-        .order-details.active {
-            display: block;
-        }
-
-        .order-details-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .detail-item {
-            margin-bottom: 10px;
-        }
-
-        .detail-item strong {
-            display: block;
-            margin-bottom: 3px;
-            font-size: 0.85rem;
-            color: var(--gray-color);
-        }
-
-        .order-summary {
-            width: 200px;
-        }
-
-        .orders-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .orders-table td {
-            padding: 3px 6px;
-            font-size: 12px;
-            line-height: 1.3;
-        }
-
-
-        @media (max-width: 768px) {
-            .admin-container {
-                padding: 15px;
-            }
-            
-            .replenishments-table,
-            .withdrawals-table,
-            .orders-table {
-                display: block;
-                overflow-x: auto;
-            }
-            
-            .tabs {
-                overflow-x: auto;
-                padding-bottom: 5px;
-            }
-
-            .modal-content {
-                width: 95%;
-                margin: 10px auto;
-            }
-
-            .order-meta {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+/* ===== helpers for readability ===== */
+.small-muted{font-size:12px;color:var(--muted)}
+.kbd{background:#fff;border:1px solid var(--border);padding:2px 6px;border-radius:6px;font-weight:800}
+.code{background:#fff;border:1px solid var(--border);padding:2px 6px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+</style>
 </head>
 <body>
     <div class="admin-container">
@@ -513,10 +367,10 @@
                 <tr>
                 <th>ID</th>
                 <th>Дата и время</th>
-                <th>Трек‑номер</th>
+                <th>Трек-номер</th>
                 <th>Ссылка на товар</th>
                 <th>Товар</th>
-                <th>Кол‑во</th>
+                <th>Кол-во</th>
                 <th>Сумма</th>
                 </tr>
             </thead>
@@ -539,7 +393,7 @@
                     <div class="detail-item"><strong>Цвет:</strong> {{ order.color }}</div>
                     <div class="detail-item"><strong>Размер:</strong> {{ order.size }}</div>
                     {% if order.china_tracking_number %}
-                    <div class="detail-item"><strong>China‑трек:</strong> {{ order.china_tracking_number }}</div>
+                    <div class="detail-item"><strong>China-трек:</strong> {{ order.china_tracking_number }}</div>
                     {% endif %}
                     {% if order.warehouse_location %}
                     <div class="detail-item"><strong>Склад:</strong> {{ order.warehouse_location }}</div>
@@ -688,7 +542,10 @@
         <!-- Вкладка посылок -->
         <div id="shipments-tab" class="tab-content" style="display: none;">
         <div class="card">
-            <h3>Посылки ({{ shipments|length if shipments is defined else 0 }})</h3>
+            <h3 style="display:flex;align-items:center;gap:10px;">
+            Посылки ({{ shipments|length if shipments is defined else 0 }})
+            <!-- <button id="btn-refresh-packaging" class="btn-details" type="button" title="Обновить статусы упаковки">⟳ Обновить</button> -->
+            </h3>
 
             <table class="shipments-table" style="width:100%; border-collapse: collapse;">
             <thead>
@@ -699,6 +556,7 @@
                 <th>Треки товаров / Orders</th>
                 <th>Вес (кг)</th>
                 <th>Тип доставки</th>
+                <th>Статус</th>
                 <th>Упаковка</th>
                 <th>Действия</th>
                 </tr>
@@ -711,7 +569,7 @@
                     <td>{{ s.created_at.strftime('%d.%m.%Y %H:%M') if s.created_at else '' }}</td>
                     <td>{{ s.our_tracking_number or '—' }}</td>
 
-                    <!-- Краткая колонка: показываем order ids кратко -->
+                    <!-- Краткая колонка: показываем order ids -->
                     <td>
                     {% set mids = s.get('model_ids') %}
                     {% if mids is iterable %}
@@ -725,18 +583,30 @@
 
                     <td>{{ "%.2f"|format(s.total_weight) if s.total_weight is not none else '—' }}</td>
                     <td>{{ s.delivery_method or '—' }}</td>
-                    <td>
-                    {% set pack = s.get('packaging_options') %}
-                    {% if pack is string %}
-                        {{ pack }}
-                    {% elif pack is iterable %}
-                        {{ pack | join(', ') }}
-                    {% elif pack %}
-                        {{ pack }}
+
+                    <td id="status-summary-{{ s.id }}">
+                        {% set _st = s.status or 'pending' %}
+                        {% if _st == 'pending' %}Ожидает обработки
+                        {% elif _st == 'processing' %}В обработке
+                        {% elif _st == 'shipped' %}В пути
+                        {% elif _st == 'delivered' %}Доставлено
+                        {% else %}{{ _st }}{% endif %}
+                    </td>
+
+                    <!-- Краткий статус упаковки (с автообновлением) -->
+                    <td id="pkg-summary-{{ s.id }}">
+                    {% if s.packaging_cost and s.packaging_cost > 0 %}
+                        <span class="pkg-amount" data-amount="{{ '%.2f'|format(s.packaging_cost) }}">{{ "%.2f"|format(s.packaging_cost) }} CNY</span>
+                        {% if s.packaging_paid %}
+                        <span class="badge-paid">Оплачено</span>
+                        {% else %}
+                        <span class="badge-unpaid">Не оплачено</span>
+                        {% endif %}
                     {% else %}
                         —
                     {% endif %}
                     </td>
+
                     <td>
                     <button class="btn-show-shipment-details" data-id="{{ s.id }}">Детали</button>
                     </td>
@@ -746,89 +616,156 @@
                 <tr class="shipment-details-row" data-id="{{ s.id }}" style="display:none; background:#f6f6f6;">
                     <td colspan="8">
                     <div class="shipment-details" style="padding:12px;">
-
-                        <!-- Информация о том, кто создал посылку (creator) -->
+                        <!-- Создатель -->
                         <div style="margin-bottom:10px;">
-                            <strong>Создал посылку (creator):</strong>
-                            {% if s.creator %}
-                                <div>Пользователь: {{ s.creator.username }} (ID: {{ s.creator.id }})</div>
-                                <div>Телефон: {{ s.creator.phone or '—' }}, Email: {{ s.creator.email or '—' }}</div>
-                            {% else %}
-                                <div>—</div>
-                            {% endif %}
+                        <strong>Создал посылку (creator):</strong>
+                        {% if s.creator %}
+                            <div>Пользователь: {{ s.creator.username }} (ID: {{ s.creator.id }})</div>
+                            <div>Телефон: {{ s.creator.phone or '—' }}, Email: {{ s.creator.email or '—' }}</div>
+                        {% else %}
+                            <div>—</div>
+                        {% endif %}
                         </div>
 
-                        <!-- Информация о получателе -->
+                        <!-- Получатель -->
                         <div style="margin-bottom:10px;">
-                            <strong>Получатель / адрес:</strong>
-                            <div>{{ s.recipient_name or '—' }}</div>
-                            <div>{{ s.recipient_phone or '—' }}</div>
-                            <div>{{ s.recipient_city or '—' }}, {{ s.recipient_address or '—' }}</div>
+                        <strong>Получатель / адрес:</strong>
+                        <div>{{ s.recipient_name or '—' }}</div>
+                        <div>{{ s.recipient_phone or '—' }}</div>
+                        <div>{{ s.recipient_city or '—' }}, {{ s.recipient_address or '—' }}</div>
                         </div>
 
-                        <!-- Таблица с подробной информацией по товарам (orders) -->
+                        <!-- Таблица товаров -->
                         <div style="overflow-x:auto; margin-top:12px;">
                         <table style="width:100%; border-collapse: collapse; font-size: 13px;">
                             <thead>
-                                <tr style="background:#e9ecef;">
-                                    <th style="padding:8px; text-align:left;">Order ID</th>
-                                    <th style="padding:8px; text-align:left;">Model ID</th>
-                                    <th style="padding:8px; text-align:left;">Товар</th>
-                                    <th style="padding:8px; text-align:right;">Кол-во</th>
-                                    <th style="padding:8px; text-align:right;">Вес (кг)</th>
-                                    <th style="padding:8px; text-align:right;">Цена</th>
-                                    <th style="padding:8px; text-align:left;">Наш трек</th>
-                                    <th style="padding:8px; text-align:left;">CN трек</th>
-                                    <th style="padding:8px; text-align:left;">Покупатель (контакты)</th>
-                                </tr>
+                            <tr style="background:#e9ecef;">
+                                <th style="padding:8px; text-align:left;">Order ID</th>
+                                <th style="padding:8px; text-align:left;">Model ID</th>
+                                <th style="padding:8px; text-align:left;">Товар</th>
+                                <th style="padding:8px; text-align:right;">Кол-во</th>
+                                <th style="padding:8px; text-align:right;">Вес (кг)</th>
+                                <th style="padding:8px; text-align:right;">Цена</th>
+                                <th style="padding:8px; text-align:left;">Наш трек</th>
+                                <th style="padding:8px; text-align:left;">CN трек</th>
+                                <th style="padding:8px; text-align:left;">Покупатель (контакты)</th>
+                            </tr>
                             </thead>
                             <tbody>
-                                {% set items = s.get('items') %}
-                                {% if items %}
-                                    {% for it in items %}
-                                    <tr>
-                                        <td>{{ it.order_id or '—' }}</td>
-                                        <td>{{ it.model_id or '—' }}</td>
-                                        <td>{{ it.product_title or '—' }}</td>
-                                        <td style="text-align:right;">{{ it.quantity or '—' }}</td>
-                                        <td style="text-align:right;">{{ "%.2f"|format(it.weight) if it.weight is not none else '—' }}</td>
-                                        <td style="text-align:right;">{{ "%.2f"|format(it.price) if it.price is not none else '—' }}</td>
-                                        <td>{{ it.our_tracking_number or '—' }}</td>
-                                        <td>{{ it.china_tracking_number or '—' }}</td>
-                                        <td>
-                                            {% if it.buyer %}
-                                                {{ it.buyer.name or '—' }} {{ it.buyer.phone or '' }}
-                                            {% else %} — {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                {% else %}
-                                    <tr>
-                                        <td colspan="9">
-                                            {% set mids = s.get('model_ids') %}
-                                            {% if mids is iterable %}
-                                                {{ mids | join(', ') }}
-                                            {% else %}
-                                                {{ mids or '—' }}
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                {% endif %}
+                            {% set items = s.get('items') %}
+                            {% if items %}
+                                {% for it in items %}
+                                <tr>
+                                <td>{{ it.order_id or '—' }}</td>
+                                <td>{{ it.model_id or '—' }}</td>
+                                <td>{{ it.product_title or '—' }}</td>
+                                <td style="text-align:right;">{{ it.quantity or '—' }}</td>
+                                <td style="text-align:right;">{{ "%.2f"|format(it.weight) if it.weight is not none else '—' }}</td>
+                                <td style="text-align:right;">{{ "%.2f"|format(it.price) if it.price is not none else '—' }}</td>
+                                <td>{{ it.our_tracking_number or '—' }}</td>
+                                <td>{{ it.china_tracking_number or '—' }}</td>
+                                <td>
+                                    {% if it.buyer %}
+                                    {{ it.buyer.name or '—' }} {{ it.buyer.phone or '' }}
+                                    {% else %} — {% endif %}
+                                </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                <td colspan="9">
+                                    {% set mids = s.get('model_ids') %}
+                                    {% if mids is iterable %}
+                                    {{ mids | join(', ') }}
+                                    {% else %}
+                                    {{ mids or '—' }}
+                                    {% endif %}
+                                </td>
+                                </tr>
+                            {% endif %}
                             </tbody>
                         </table>
                         </div>
 
-                        <!-- Прочая информация по посылке -->
+                        <!-- Блок управления упаковкой (админ) -->
+                        <div class="packaging-admin" style="margin-top:14px; display:flex; align-items:center; gap:10px;">
+                            <span class="detail-label" style="min-width:140px; font-weight:600;">Упаковка (CNY):</span>
+                            <input
+                                type="number"
+                                class="packaging-input"
+                                step="0.01"
+                                min="0"
+                                value="{{ "%.2f"|format(s.packaging_cost) if s.packaging_cost is not none else '' }}"
+                                placeholder="0.00"
+                                data-shipment-id="{{ s.id }}"
+                                id="pkg-input-{{ s.id }}"
+                                {% if s.packaging_paid %}disabled{% endif %}
+                                style="width:140px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;"
+                            >
+                            <span id="pkg-badge-{{ s.id }}">
+                                {% if s.packaging_cost and s.packaging_cost > 0 %}
+                                {% if s.packaging_paid %}
+                                    <span class="badge-paid">Оплачено</span>
+                                {% else %}
+                                    <span class="badge-unpaid">Не оплачено</span>
+                                {% endif %}
+                                {% endif %}
+                            </span>
+                            {% if s.packaging_paid %}
+                                <!-- уже оплачено, кнопка не нужна -->
+                            {% else %}
+                                <button
+                                class="btn-set-packaging"
+                                id="btn-set-packaging-{{ s.id }}"
+                                data-url="{{ url_for('admin_set_packaging', shipment_id=s.id) }}"
+                                data-shipment-id="{{ s.id }}"
+                                type="button"
+                                >Выставить счёт</button>
+                            {% endif %}
+
+                            <!-- Управление статусом посылки (админ) -->
+                            <div class="shipment-status-admin" style="margin-top:14px; display:flex; align-items:center; gap:10px;">
+                                <span class="detail-label" style="min-width:140px; font-weight:600;">Статус посылки:</span>
+
+                                <select
+                                    id="status-select-{{ s.id }}"
+                                    class="status-select"
+                                    data-shipment-id="{{ s.id }}"
+                                    style="min-width:220px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;"
+                                >
+                                    <option value="pending"    {{ 'selected' if s.status == 'pending' else '' }}>Ожидает обработки</option>
+                                    <option value="processing" {{ 'selected' if s.status == 'processing' else '' }}>В обработке</option>
+                                    <option value="shipped"    {{ 'selected' if s.status == 'shipped' else '' }}>В пути</option>
+                                    <option value="delivered"  {{ 'selected' if s.status == 'delivered' else '' }}>Доставлено</option>
+                                </select>
+
+                                <button
+                                    class="btn-set-status"
+                                    id="btn-set-status-{{ s.id }}"
+                                    data-shipment-id="{{ s.id }}"
+                                    data-url="/admin/shipments/{{ s.id }}/status"
+                                    type="button"
+                                    style="background:#111827;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;"
+                                >
+                                    Обновить статус
+                                </button>
+
+                                <span id="status-hint-{{ s.id }}" style="font-size:12px;color:#6b7280;"></span>
+                            </div>
+
+                        </div>
+
+                        <!-- Прочая инфа -->
                         <div style="margin-top:12px;">
-                            <strong>Вес посылки:</strong> {{ "%.2f"|format(s.total_weight) if s.total_weight is not none else '—' }} кг<br>
-                            <strong>Стоимость доставки:</strong> {{ "%.2f"|format(s.delivery_cost) if s.delivery_cost is not none else '—' }} <br>
-                            <strong>Стоимость упаковки:</strong> {{ "%.2f"|format(s.packaging_cost) if s.packaging_cost is not none else '—' }} <br>
-                            <strong>Итого (total_cost):</strong> {{ "%.2f"|format(s.total_cost) if s.total_cost is not none else '—' }} <br>
+                        <strong>Вес посылки:</strong> {{ "%.2f"|format(s.total_weight) if s.total_weight is not none else '—' }} кг<br>
+                        <strong>Стоимость доставки:</strong> {{ "%.2f"|format(s.delivery_cost) if s.delivery_cost is not none else '—' }} <br>
+                        <strong>Стоимость упаковки:</strong> <span id="pkg-amount-{{ s.id }}">{{ "%.2f"|format(s.packaging_cost) if s.packaging_cost is not none else '—' }}</span> <br>
+                        <strong>Итого (total_cost):</strong> {{ "%.2f"|format(s.total_cost) if s.total_cost is not none else '—' }} <br>
                         </div>
 
                         <div style="margin-top:10px;">
-                            <button class="btn-update-shipment" data-id="{{ s.id }}">Обновить</button>
-                            <button class="btn-send-tracking" data-id="{{ s.id }}">Отправить трек</button>
+                        <button class="btn-update-shipment" data-id="{{ s.id }}">Обновить</button>
+                        <button class="btn-send-tracking" data-id="{{ s.id }}">Отправить трек</button>
                         </div>
                     </div>
                     </td>
@@ -841,441 +778,576 @@
             </table>
         </div>
         </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+    // ==================== ВСПОМОГАТЕЛЬНОЕ ====================
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
 
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Инициализация вкладок
-            function initTabs() {
-                const tabContents = document.querySelectorAll('.tab-content');
-                tabContents.forEach(content => {
-                    if (content.id !== 'replenishments-tab') {
-                        content.style.display = 'none';
-                    }
-                });
-
-                document.querySelectorAll('.tab-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                        this.classList.add('active');
-                        
-                        document.querySelectorAll('.tab-content').forEach(content => {
-                            content.style.display = 'none';
-                        });
-                        
-                        const tabId = this.dataset.tab + '-tab';
-                        const tabContent = document.getElementById(tabId);
-                        if (tabContent) {
-                            tabContent.style.display = 'block';
-                        }
-                    });
-                });
-            }
-
-            // Обработка действий с пополнениями
-            async function handleReplenishmentAction(action, replenishmentId) {
-                try {
-                    const comment = action === 'approve' 
-                        ? 'Одобрено администратором'
-                        : 'Отклонено администратором';
-                    
-                    const endpoint = `/api/replenishments/${replenishmentId}/${action}`;
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: `comment=${encodeURIComponent(comment)}`
-                    });
-                    
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || 'Ошибка сервера');
-                    }
-                    
-                    const row = document.querySelector(`tr[data-id="${replenishmentId}"]`);
-                    if (row) row.remove();
-                    
-                    alert(`Заявка ${action === 'approve' ? 'одобрена' : 'отклонена'}`);
-                } catch (error) {
-                    console.error('Error:', error);
-                    alert(`Ошибка: ${error.message}`);
-                }
-            }
-
-            // Обработка действий с выводами
-            async function handleWithdrawalAction(action, withdrawalId) {
-                try {
-                    const comment = prompt("Введите комментарий:", 
-                        action === 'approve' ? "Одобрено администратором" : "Отклонено администратором");
-                    
-                    if (comment === null) return;
-                    
-                    const response = await fetch(`/admin/withdrawals/${withdrawalId}/${action}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            comment: comment,
-                            admin_id: {{ user.id }}  // Убедитесь, что user.id доступен
-                        })
-                    });
-                    
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || 'Ошибка сервера');
-                    }
-                    
-                    // Обновляем только одну строку вместо всей таблицы
-                    const row = document.querySelector(`#withdrawals-body tr[data-id="${withdrawalId}"]`);
-                    if (row) {
-                        const statusCell = row.querySelector('td:nth-child(7)');
-                        if (statusCell) {
-                            statusCell.className = `status-${action === 'approve' ? 'approved' : 'rejected'}`;
-                            statusCell.textContent = action === 'approve' ? 'Одобрено' : 'Отклонено';
-                            
-                            // Убираем кнопки действий
-                            const actionsCell = row.querySelector('td:last-child');
-                            if (actionsCell) actionsCell.innerHTML = '';
-                        }
-                    }
-                    
-                    alert(`Заявка успешно ${action === 'approve' ? 'одобрена' : 'отклонена'}`);
-                } catch (error) {
-                    console.error('Error:', error);
-                    alert(`Ошибка: ${error.message}`);
-                }
-            }
-
-            // Обработка раскрытия деталей заказа
-            function setupOrderDetails() {
-                document.querySelectorAll('.btn-details').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const orderId = this.dataset.id;
-                        const detailsRow = document.querySelector(`.order-details-row[data-id="${orderId}"] .order-details`);
-                        
-                        if (detailsRow) {
-                            detailsRow.classList.toggle('active');
-                            
-                            // Изменяем иконку кнопки
-                            const icon = this.querySelector('span');
-                            if (detailsRow.classList.contains('active')) {
-                                icon.textContent = '🔽';
-                                this.setAttribute('title', 'Скрыть детали');
-                            } else {
-                                icon.textContent = '🔍';
-                                this.setAttribute('title', 'Показать детали');
-                            }
-                        }
-                    });
-                });
-            }
-
-            // Обновление таблицы выводов
-            async function refreshWithdrawals() {
-                try {
-                    const response = await fetch('/admin/withdrawals/data');
-                    
-                    if (!response.ok) {
-                        throw new Error('Ошибка загрузки данных');
-                    }
-                    
-                    const data = await response.json();
-                    const tbody = document.getElementById('withdrawals-body');
-                    
-                    if (!tbody) return;
-                    
-                    if (data.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="8" class="no-data">Нет ожидающих заявок</td></tr>';
-                        return;
-                    }
-                    
-                    tbody.innerHTML = data.map(w => `
-                        <tr data-id="${w.id}">
-                            <td>${w.id}</td>
-                            <td>${escapeHtml(w.user_name)}</td>
-                            <td>${w.amount.toFixed(2)} ₽</td>
-                            <td>${w.card_number || '—'}</td>
-                            <td>${escapeHtml(w.card_holder || '—')}</td>
-                            <td>${w.created_at ? w.created_at : ''}</td>
-                            <td class="status-${w.status}">
-                                ${w.status === 'pending' ? 'Ожидает' : 
-                                w.status === 'approved' ? 'Одобрено' : 'Отклонено'}
-                            </td>
-                            <td>
-                                ${w.status === 'pending' ? `
-                                <button class="action-btn btn-approve" data-id="${w.id}">Одобрить</button>
-                                <button class="action-btn btn-reject" data-id="${w.id}">Отклонить</button>
-                                ` : ''}
-                            </td>
-                        </tr>
-                    `).join('');
-                } catch (error) {
-                    console.error('Ошибка обновления данных:', error);
-                    const tbody = document.getElementById('withdrawals-body');
-                    if (tbody) {
-                        tbody.innerHTML = '<tr><td colspan="8" class="error">Ошибка загрузки данных</td></tr>';
-                    }
-                }
-            }
-
-            // Экранизация HTML
-            function escapeHtml(text) {
-                if (!text) return '';
-                return text
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#039;');
-            }
-
-            // Обработчики событий
-            function setupEventListeners() {
-                document.addEventListener('click', function(e) {
-                    const approveBtn = e.target.closest('.btn-approve');
-                    const rejectBtn = e.target.closest('.btn-reject');
-                    
-                    if (approveBtn || rejectBtn) {
-                        const btn = approveBtn || rejectBtn;
-                        const action = approveBtn ? 'approve' : 'reject';
-                        const tab = btn.closest('.tab-content').id;
-                        
-                        if (tab === 'replenishments-tab') {
-                            handleReplenishmentAction(action, btn.dataset.id);
-                        } else if (tab === 'withdrawals-tab') {
-                            handleWithdrawalAction(action, btn.dataset.id);
-                        }
-                    }
-                });
-            }
-
-            document.querySelectorAll('.order-summary').forEach(row => {
-                row.addEventListener('click', () => {
-                    const id = row.dataset.id;
-                    const detailsRow = document.querySelector(`.order-details-row[data-id="${id}"]`);
-                    if (!detailsRow) return;
-                    // toggle display
-                    detailsRow.style.display = detailsRow.style.display === 'table-row' ? 'none' : 'table-row';
-                });
-                })
-
-            // --- Обработчик сохранения статуса заказа ---
-            document.querySelectorAll('.btn-save-status').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const orderId = btn.dataset.orderId;
-                    const select = document.querySelector(`.status-select[data-order-id="${orderId}"]`);
-                    const newStatus = select.value;
-
-                    try {
-                    const resp = await fetch(`/api/orders/${orderId}/status`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: newStatus })
-                    });
-                    if (!resp.ok) throw new Error('Сервер вернул ошибку');
-                    
-                    alert('Статус успешно обновлён');
-                    // при желании тут можно автоматически убрать кнопку либо обновить строку
-                    } catch (err) {
-                    console.error(err);
-                    alert('Не удалось сохранить статус: ' + err.message);
-                    }
-                });
-            });
-
-            document.querySelectorAll('.btn-save-cn-price').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                const orderId = btn.dataset.orderId;
-                const input = document.querySelector(`.cn-delivery-price-input[data-order-id="${orderId}"]`);
-                const raw = input.value.trim();
-                const price = raw === '' ? null : parseFloat(raw);
-
-                try {
-                    const resp = await fetch(`/api/orders/${orderId}/cn_delivery_price`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cn_delivery_price: price })
-                    });
-                    const data = await resp.json();
-                    if (!resp.ok) throw new Error(data.error || 'Ошибка сервера');
-                    alert('Стоимость доставки сохранена');
-                } catch (err) {
-                    console.error(err);
-                    alert('Не удалось сохранить доставку: ' + err.message);
-                }
-                });
-            });
-
-            // Обработчик сохранения веса
-            document.querySelectorAll('.btn-save-weight').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const orderId = btn.dataset.orderId;
-                    const input = document.querySelector(`.weight-input[data-order-id="${orderId}"]`);
-                    const raw = input.value.trim();
-                    const weight = raw === '' ? null : parseFloat(raw);
-
-                    try {
-                        const resp = await fetch(`/api/orders/${orderId}/weight`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ weight: weight })
-                        });
-                        const data = await resp.json();
-                        if (!resp.ok) throw new Error(data.error || 'Ошибка сервера');
-                        alert('Вес товара сохранен');
-                    } catch (err) {
-                        console.error(err);
-                        alert('Не удалось сохранить вес: ' + err.message);
-                    }
-                });
-});
-
-            document.addEventListener('click', function(e) {
-                if (e.target.classList.contains('btn-add-photo')) {
-                    const orderId = e.target.dataset.orderId;
-                    const input = e.target.previousElementSibling;
-                    const photoUrl = input.value.trim();
-                    
-                    if (!photoUrl) {
-                        alert('Введите ссылку на фото');
-                        return;
-                    }
-                    
-                    // Проверяем, похожа ли ссылка на изображение
-                    if (!/\.(jpeg|jpg|png|gif|webp)$/i.test(photoUrl)) {
-                        alert('Пожалуйста, введите ссылку на изображение (JPEG, PNG, GIF, WebP)');
-                        return;
-                    }
-                    
-                    // Отправляем запрос на сервер
-                    fetch(`/admin/orders/${orderId}/add_photo`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ photo_url: photoUrl })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            // Очищаем поле ввода
-                            input.value = '';
-                            
-                            // Добавляем фото в список
-                            const photoList = document.querySelector(`.photo-list[data-order-id="${orderId}"]`);
-                            const photoItem = document.createElement('div');
-                            photoItem.className = 'photo-item';
-                            photoItem.dataset.url = photoUrl;
-                            photoItem.innerHTML = `
-                                <img src="${photoUrl}" alt="Фото товара" style="max-width: 150px; max-height: 150px; margin: 5px; border: 1px solid #ddd;">
-                                <button class="btn-remove-photo" 
-                                        data-url="${photoUrl}"
-                                        data-order-id="${orderId}"
-                                        style="background: #ff4d4d; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer;">
-                                    ×
-                                </button>
-                            `;
-                            photoList.appendChild(photoItem);
-                        } else {
-                            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Ошибка:', error);
-                        alert('Произошла ошибка при добавлении фото');
-                    });
-                }
-            });
-
-            document.addEventListener('click', function(e) {
-                if (e.target.classList.contains('btn-remove-photo')) {
-                    const photoUrl = e.target.dataset.url;
-                    const orderId = e.target.dataset.orderId;
-                    
-                    if (confirm('Удалить это фото?')) {
-                        fetch(`/admin/orders/${orderId}/remove_photo`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ photo_url: photoUrl })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                // Удаляем элемент из списка
-                                e.target.closest('.photo-item').remove();
-                            } else {
-                                alert('Ошибка при удалении фото');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Ошибка:', error);
-                            alert('Произошла ошибка при удалении фото');
-                        });
-                    }
-                }
-            });
-
-            document.addEventListener('click', function(e) {
-                const btn = e.target.closest('.btn-show-shipment-details');
-                if (btn) {
-                    const id = btn.dataset.id;
-                    const detailsRow = document.querySelector(`.shipment-details-row[data-id="${id}"]`);
-                    if (!detailsRow) return;
-                    // toggle
-                    const isShown = detailsRow.style.display === 'table-row' || detailsRow.style.display === 'block';
-                    detailsRow.style.display = isShown ? 'none' : 'table-row';
-
-                    // если деталей нет (например, сервер не прислал items) — можно подгрузить
-                    if (!isShown) {
-                        const missingItems = detailsRow.querySelector('ul li') &&
-                                            detailsRow.querySelector('ul li').textContent.includes('Детали товаров не загружены');
-                        if (missingItems) {
-                            // подгружаем по API: /admin/shipments/<id>/details
-                            fetch(`/admin/shipments/${id}/details`)
-                            .then(r => r.ok ? r.json() : Promise.reject(r))
-                            .then(data => {
-                                if (data && data.items) {
-                                    const ul = detailsRow.querySelector('ul');
-                                    ul.innerHTML = '';
-                                    data.items.forEach(it => {
-                                        const li = document.createElement('li');
-                                        let txt = '';
-                                        if (it.product_title) txt += `<strong>${escapeHtml(it.product_title)}</strong> — `;
-                                        if (it.our_tracking_number) txt += `our: ${escapeHtml(it.our_tracking_number)} `;
-                                        if (it.china_tracking_number) txt += `cn: ${escapeHtml(it.china_tracking_number)} `;
-                                        if (it.order_id) txt += `(order #${it.order_id})`;
-                                        li.innerHTML = txt;
-                                        ul.appendChild(li);
-                                    });
-                                }
-                            }).catch(err => {
-                                console.error('Ошибка подгрузки деталей посылки', err);
-                            });
-                        }
-                    }
-                }
-            });
-    
-
-            // Инициализация
-            initTabs();
-            setupEventListeners();
-            setupOrderDetails();
-            
-            // Автоматическое обновление только для выводов
-            refreshWithdrawals();
-            const refreshInterval = setInterval(refreshWithdrawals, 30000);
-
-            // Очистка при размонтировании (если нужно)
-            window.addEventListener('beforeunload', () => {
-                clearInterval(refreshInterval);
-            });
+    // ==================== ТАБЫ ====================
+    function initTabs() {
+        const tabContents = document.querySelectorAll('.tab-content');
+        tabContents.forEach(content => {
+        if (content.id !== 'replenishments-tab') content.style.display = 'none';
         });
-    </script>
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
+            const tabId = this.dataset.tab + '-tab';
+            const tabContent = document.getElementById(tabId);
+            if (tabContent) tabContent.style.display = 'block';
+        });
+        });
+    }
+
+    // ==================== ПОПОЛНЕНИЯ ====================
+    async function handleReplenishmentAction(action, replenishmentId) {
+        try {
+        const comment = action === 'approve' ? 'Одобрено администратором' : 'Отклонено администратором';
+        const endpoint = `/api/replenishments/${replenishmentId}/${action}`;
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `comment=${encodeURIComponent(comment)}`
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Ошибка сервера');
+        }
+        const row = document.querySelector(`tr[data-id="${replenishmentId}"]`);
+        if (row) row.remove();
+        alert(`Заявка ${action === 'approve' ? 'одобрена' : 'отклонена'}`);
+        } catch (error) {
+        console.error('Error:', error);
+        alert(`Ошибка: ${error.message}`);
+        }
+    }
+
+    // === Статус посылки: сохранить ===
+    async function setShipmentStatus(btn){
+        const id   = btn.dataset.shipmentId;
+        const url  = btn.dataset.url;
+        const sel  = document.getElementById(`status-select-${id}`);
+        const hint = document.getElementById(`status-hint-${id}`);
+        const cell = document.getElementById(`status-summary-${id}`);
+
+        if (!sel) return;
+        const status = sel.value;
+
+        btn.disabled = true;
+        if (hint) hint.textContent = 'Сохраняем...';
+
+        try {
+            const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status })
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok || !d.success) {
+            alert(d.error || 'Не удалось обновить статус');
+            btn.disabled = false;
+            if (hint) hint.textContent = '';
+            return;
+            }
+
+            if (cell) cell.textContent = d.status_label || d.status || status; // обновили текст
+
+            if (hint) { // небольшой «успех»
+            hint.style.color = '#2e7d32';
+            hint.textContent = 'Сохранено';
+            setTimeout(() => { hint.textContent = ''; }, 1500);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Сетевая ошибка');
+            if (hint) hint.textContent = '';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // навешивание обработчиков
+    document.querySelectorAll('.btn-set-status').forEach(b => {
+    b.addEventListener('click', () => setShipmentStatus(b));
+    });
+
+
+    // ==================== ВЫВОДЫ ====================
+    async function handleWithdrawalAction(action, withdrawalId) {
+        try {
+        const comment = prompt("Введите комментарий:",
+            action === 'approve' ? "Одобрено администратором" : "Отклонено администратором");
+        if (comment === null) return;
+
+        const response = await fetch(`/admin/withdrawals/${withdrawalId}/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+            comment: comment,
+            admin_id: {{ user.id }}
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Ошибка сервера');
+        }
+
+        const row = document.querySelector(`#withdrawals-body tr[data-id="${withdrawalId}"]`);
+        if (row) {
+            const statusCell = row.querySelector('td:nth-child(7)');
+            if (statusCell) {
+            statusCell.className = `status-${action === 'approve' ? 'approved' : 'rejected'}`;
+            statusCell.textContent = action === 'approve' ? 'Одобрено' : 'Отклонено';
+            const actionsCell = row.querySelector('td:last-child');
+            if (actionsCell) actionsCell.innerHTML = '';
+            }
+        }
+        alert(`Заявка успешно ${action === 'approve' ? 'одобрена' : 'отклонена'}`);
+        } catch (error) {
+        console.error('Error:', error);
+        alert(`Ошибка: ${error.message}`);
+        }
+    }
+
+    async function refreshWithdrawals() {
+        try {
+        const response = await fetch('/admin/withdrawals/data');
+        if (!response.ok) throw new Error('Ошибка загрузки данных');
+        const data = await response.json();
+        const tbody = document.getElementById('withdrawals-body');
+        if (!tbody) return;
+
+        if (!data.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="no-data">Нет ожидающих заявок</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map(w => `
+            <tr data-id="${w.id}">
+            <td>${w.id}</td>
+            <td>${escapeHtml(w.user_name)}</td>
+            <td>${Number(w.amount || 0).toFixed(2)} ₽</td>
+            <td>${w.card_number || '—'}</td>
+            <td>${escapeHtml(w.card_holder || '—')}</td>
+            <td>${w.created_at ? w.created_at : ''}</td>
+            <td class="status-${w.status}">
+                ${w.status === 'pending' ? 'Ожидает' : w.status === 'approved' ? 'Одобрено' : 'Отклонено'}
+            </td>
+            <td>
+                ${w.status === 'pending' ? `
+                <button class="action-btn btn-approve" data-id="${w.id}">Одобрить</button>
+                <button class="action-btn btn-reject" data-id="${w.id}">Отклонить</button>
+                ` : ''}
+            </td>
+            </tr>
+        `).join('');
+        } catch (error) {
+        console.error('Ошибка обновления данных:', error);
+        const tbody = document.getElementById('withdrawals-body');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="8" class="error">Ошибка загрузки данных</td></tr>';
+        }
+        }
+    }
+
+    // ==================== ЗАКАЗЫ: ДЕТАЛИ/СТАТУС/ВЕС/ФОТО ====================
+    function setupOrderDetails() {
+        document.querySelectorAll('.btn-details').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const orderId = this.dataset.id;
+            const detailsRow = document.querySelector(`.order-details-row[data-id="${orderId}"] .order-details`);
+            if (!detailsRow) return;
+            detailsRow.classList.toggle('active');
+            const icon = this.querySelector('span');
+            if (icon) {
+            if (detailsRow.classList.contains('active')) {
+                icon.textContent = '🔽';
+                this.setAttribute('title', 'Скрыть детали');
+            } else {
+                icon.textContent = '🔍';
+                this.setAttribute('title', 'Показать детали');
+            }
+            }
+        });
+        });
+    }
+
+    document.querySelectorAll('.order-summary').forEach(row => {
+        row.addEventListener('click', () => {
+        const id = row.dataset.id;
+        const detailsRow = document.querySelector(`.order-details-row[data-id="${id}"]`);
+        if (!detailsRow) return;
+        detailsRow.style.display = detailsRow.style.display === 'table-row' ? 'none' : 'table-row';
+        });
+    });
+
+    document.querySelectorAll('.btn-save-status').forEach(btn => {
+        btn.addEventListener('click', async () => {
+        const orderId = btn.dataset.orderId;
+        const select = document.querySelector(`.status-select[data-order-id="${orderId}"]`);
+        const newStatus = select ? select.value : null;
+        try {
+            const resp = await fetch(`/api/orders/${orderId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+            });
+            if (!resp.ok) throw new Error('Сервер вернул ошибку');
+            alert('Статус успешно обновлён');
+        } catch (err) {
+            console.error(err);
+            alert('Не удалось сохранить статус: ' + err.message);
+        }
+        });
+    });
+
+    document.querySelectorAll('.btn-save-cn-price').forEach(btn => {
+        btn.addEventListener('click', async () => {
+        const orderId = btn.dataset.orderId;
+        const input = document.querySelector(`.cn-delivery-price-input[data-order-id="${orderId}"]`);
+        const raw = input ? input.value.trim() : '';
+        const price = raw === '' ? null : parseFloat(raw);
+        try {
+            const resp = await fetch(`/api/orders/${orderId}/cn_delivery_price`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cn_delivery_price: price })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.error || 'Ошибка сервера');
+            alert('Стоимость доставки сохранена');
+        } catch (err) {
+            console.error(err);
+            alert('Не удалось сохранить доставку: ' + err.message);
+        }
+        });
+    });
+
+    document.querySelectorAll('.btn-save-weight').forEach(btn => {
+        btn.addEventListener('click', async () => {
+        const orderId = btn.dataset.orderId;
+        const input = document.querySelector(`.weight-input[data-order-id="${orderId}"]`);
+        const raw = input ? input.value.trim() : '';
+        const weight = raw === '' ? null : parseFloat(raw);
+        try {
+            const resp = await fetch(`/api/orders/${orderId}/weight`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ weight: weight })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.error || 'Ошибка сервера');
+            alert('Вес товара сохранен');
+        } catch (err) {
+            console.error(err);
+            alert('Не удалось сохранить вес: ' + err.message);
+        }
+        });
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('btn-add-photo')) {
+        const orderId = e.target.dataset.orderId;
+        const input = e.target.previousElementSibling;
+        const photoUrl = (input && input.value || '').trim();
+
+        if (!photoUrl) { alert('Введите ссылку на фото'); return; }
+        if (!/\.(jpeg|jpg|png|gif|webp)$/i.test(photoUrl)) {
+            alert('Пожалуйста, введите ссылку на изображение (JPEG, PNG, GIF, WebP)');
+            return;
+        }
+
+        fetch(`/admin/orders/${orderId}/add_photo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ photo_url: photoUrl })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+            input.value = '';
+            const photoList = document.querySelector(`.photo-list[data-order-id="${orderId}"]`);
+            const photoItem = document.createElement('div');
+            photoItem.className = 'photo-item';
+            photoItem.dataset.url = photoUrl;
+            photoItem.innerHTML = `
+                <img src="${photoUrl}" alt="Фото товара" style="max-width:150px;max-height:150px;margin:5px;border:1px solid #ddd;">
+                <button class="btn-remove-photo" data-url="${photoUrl}" data-order-id="${orderId}"
+                style="background:#ff4d4d;color:#fff;border:none;border-radius:50%;width:25px;height:25px;cursor:pointer;">×</button>`;
+            if (photoList) photoList.appendChild(photoItem);
+            } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Произошла ошибка при добавлении фото');
+        });
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('btn-remove-photo')) {
+        const photoUrl = e.target.dataset.url;
+        const orderId = e.target.dataset.orderId;
+        if (!confirm('Удалить это фото?')) return;
+
+        fetch(`/admin/orders/${orderId}/remove_photo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ photo_url: photoUrl })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+            const item = e.target.closest('.photo-item');
+            if (item) item.remove();
+            } else {
+            alert('Ошибка при удалении фото');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Произошла ошибка при удалении фото');
+        });
+        }
+    });
+
+    // ==================== ПОСЫЛКИ: ДЕТАЛИ И УПАКОВКА ====================
+    // Подгрузка деталей (если нужно)
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.btn-show-shipment-details');
+        if (!btn) return;
+        const id = btn.dataset.id;
+        const detailsRow = document.querySelector(`.shipment-details-row[data-id="${id}"]`);
+        if (!detailsRow) return;
+
+        const isShown = detailsRow.style.display === 'table-row' || detailsRow.style.display === 'block';
+        detailsRow.style.display = isShown ? 'none' : 'table-row';
+
+        if (!isShown) {
+        const missingItems = detailsRow.querySelector('ul li') &&
+                            detailsRow.querySelector('ul li').textContent.includes('Детали товаров не загружены');
+        if (missingItems) {
+            fetch(`/admin/shipments/${id}/details`)
+            .then(r => r.ok ? r.json() : Promise.reject(r))
+            .then(data => {
+                if (data && data.items) {
+                const ul = detailsRow.querySelector('ul');
+                if (ul) {
+                    ul.innerHTML = '';
+                    data.items.forEach(it => {
+                    const li = document.createElement('li');
+                    let txt = '';
+                    if (it.product_title) txt += `<strong>${escapeHtml(it.product_title)}</strong> — `;
+                    if (it.our_tracking_number) txt += `our: ${escapeHtml(it.our_tracking_number)} `;
+                    if (it.china_tracking_number) txt += `cn: ${escapeHtml(it.china_tracking_number)} `;
+                    if (it.order_id) txt += `(order #${it.order_id})`;
+                    li.innerHTML = txt;
+                    ul.appendChild(li);
+                    });
+                }
+                }
+            })
+            .catch(err => console.error('Ошибка подгрузки деталей посылки', err));
+        }
+        }
+    });
+
+    // Выставить стоимость упаковки (админ)
+    async function setPackagingAmount(btn) {
+        const shipmentId = btn.dataset.shipmentId;
+        const url        = btn.dataset.url;
+        const input      = document.querySelector(`.packaging-input[data-shipment-id="${shipmentId}"]`);
+        const badgeSpan  = document.getElementById(`pkg-badge-${shipmentId}`);
+        const hintEl     = document.getElementById(`status-hint-${shipmentId}`); // используем общий хинт справа от кнопок
+        const summaryTd  = document.getElementById(`pkg-summary-${shipmentId}`);
+        const amountDet  = document.getElementById(`pkg-amount-${shipmentId}`);
+
+        if (!input) return;
+        const raw = (input.value || '').trim();
+        const val = raw === '' ? NaN : parseFloat(raw);
+
+        if (Number.isNaN(val) || val < 0) {
+            alert('Введите корректную сумму в юанях (0.00 или больше).');
+            return;
+        }
+
+        btn.disabled = true;
+        if (hintEl) { hintEl.style.color = '#6b7280'; hintEl.textContent = 'Сохраняем...'; }
+
+        try {
+            const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount_cny: val })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.success) {
+            alert(data.error || 'Не удалось сохранить стоимость упаковки');
+            if (hintEl) hintEl.textContent = '';
+            btn.disabled = false;
+            return;
+            }
+
+            // ЛОКАЛЬНО обновляем UI (НЕ удаляем строку, НЕ перезагружаем)
+            const costStr = val.toFixed(2);
+
+            // 1) краткая ячейка в таблице
+            if (summaryTd) {
+            summaryTd.innerHTML = `
+                <span class="pkg-amount" data-amount="${costStr}">${costStr} CNY</span>
+                <span class="badge-unpaid">Не оплачено</span>
+            `;
+            }
+
+            // 2) бейдж в блоке деталей
+            if (badgeSpan) {
+            badgeSpan.innerHTML = `<span class="badge-unpaid">Не оплачено</span>`;
+            }
+
+            // 3) инпут и кнопка в блоке деталей
+            input.value    = costStr;
+            btn.disabled   = false; // кнопку оставляем активной на случай изменения суммы
+
+            // 4) строка «Стоимость упаковки: …» в деталях
+            if (amountDet) amountDet.textContent = costStr;
+
+            // 5) небольшой «успех» хинт
+            if (hintEl) {
+            hintEl.style.color = '#2e7d32';
+            hintEl.textContent = 'Сохранено';
+            setTimeout(() => { hintEl.textContent = ''; }, 1200);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Сетевая ошибка');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+    // Привязка кнопки "Выставить счёт"
+    document.querySelectorAll('.btn-set-packaging').forEach(btn => {
+        btn.addEventListener('click', () => setPackagingAmount(btn));
+    });
+
+    // Обновление UI упаковки в списке и деталях
+    function renderPackagingUI(id, cost, paid) {
+        cost = Number(cost || 0);
+        paid = !!paid;
+
+        const summaryTd = document.getElementById(`pkg-summary-${id}`);
+        const badgeSpan = document.getElementById(`pkg-badge-${id}`);
+        const input     = document.getElementById(`pkg-input-${id}`);
+        const btnSet    = document.getElementById(`btn-set-packaging-${id}`);
+        const amountInDetails = document.getElementById(`pkg-amount-${id}`);
+
+        if (summaryTd) {
+        if (cost > 0) {
+            summaryTd.innerHTML = `
+            <span class="pkg-amount" data-amount="${cost.toFixed(2)}">${cost.toFixed(2)} CNY</span>
+            ${paid ? '<span class="badge-paid">Оплачено</span>' : '<span class="badge-unpaid">Не оплачено</span>'}
+            `;
+        } else {
+            summaryTd.textContent = '—';
+        }
+        }
+        if (badgeSpan) {
+        if (cost > 0) {
+            badgeSpan.innerHTML = paid ? '<span class="badge-paid">Оплачено</span>' : '<span class="badge-unpaid">Не оплачено</span>';
+        } else {
+            badgeSpan.innerHTML = '';
+        }
+        }
+        if (input) {
+        input.value = cost > 0 ? cost.toFixed(2) : '';
+        input.disabled = paid;
+        }
+        if (btnSet) {
+        btnSet.disabled = paid;
+        if (paid) btnSet.style.display = 'none';
+        }
+        if (amountInDetails) {
+        amountInDetails.textContent = cost > 0 ? cost.toFixed(2) : '—';
+        }
+    }
+
+    // Пуллинг статуса упаковки (чтобы увидеть "Оплачено" после оплаты пользователем)
+    const makeStatusUrl = (id) => `/admin/shipments/${id}/details`;
+
+    async function refreshPackagingFor(id) {
+        try {
+        const resp = await fetch(makeStatusUrl(id), { method: 'GET' });
+        if (!resp.ok) return;
+        const data = await resp.json().catch(() => ({}));
+        let cost = parseFloat((data && data.packaging_cost) || 0);
+        let paid = parseInt((data && data.packaging_paid) || 0, 10);
+        if (Number.isNaN(cost)) cost = 0;
+        if (Number.isNaN(paid)) paid = 0;
+        renderPackagingUI(id, cost, !!paid);
+        } catch (_) { /* молча */ }
+    }
+
+    async function refreshAllPackaging() {
+        const rows = document.querySelectorAll('tr.shipment-summary[data-id]');
+        for (const row of rows) {
+        const id = row.getAttribute('data-id');
+        await refreshPackagingFor(id);
+        }
+    }
+
+    // Кнопка ручного обновления (если есть в разметке)
+    const btnRefresh = document.getElementById('btn-refresh-packaging');
+    if (btnRefresh) btnRefresh.addEventListener('click', refreshAllPackaging);
+
+    // ==================== ГЛОБАЛЬНЫЕ ДЕЛЕГАТОРЫ ====================
+    function setupEventListeners() {
+        document.addEventListener('click', function(e) {
+        const approveBtn = e.target.closest('.btn-approve');
+        const rejectBtn  = e.target.closest('.btn-reject');
+        if (approveBtn || rejectBtn) {
+            const btn = approveBtn || rejectBtn;
+            const action = approveBtn ? 'approve' : 'reject';
+            const tab = btn.closest('.tab-content')?.id;
+            if (tab === 'replenishments-tab') {
+            handleReplenishmentAction(action, btn.dataset.id);
+            } else if (tab === 'withdrawals-tab') {
+            handleWithdrawalAction(action, btn.dataset.id);
+            }
+        }
+        });
+    }
+
+    // ==================== ИНИЦ ====================
+    initTabs();
+    setupEventListeners();
+    setupOrderDetails();
+
+    // Автообновления
+    refreshWithdrawals();
+    const refreshInterval = setInterval(refreshWithdrawals, 30000);
+
+    refreshAllPackaging();
+    const packagingInterval = setInterval(refreshAllPackaging, 15000);
+
+    window.addEventListener('beforeunload', () => {
+        clearInterval(refreshInterval);
+        clearInterval(packagingInterval);
+    });
+    });
+</script>
 </body>
 </html>
