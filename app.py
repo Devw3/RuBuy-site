@@ -735,21 +735,24 @@ def remove_cart_item():
         return jsonify(success=False, error="Не указан model_id"), 400
     
     try:
-        with db.get_cursor() as cursor:
-            row = db.execute(
-                "SELECT product_id FROM models WHERE id = ?",
-                (model_id,)
-            ).fetchone()
-            if row is None:
-                return jsonify(success=False, error="Модель не найдена"), 404
+        # Получаем product_id без raw cursor
+        row = db.query_one(
+            "SELECT product_id FROM models WHERE id = ?",
+            (model_id,)
+        )
+        if row is None:
+            return jsonify(success=False, error="Модель не найдена"), 404
 
-            product_id = row['product_id']
-            # удаляем модель
-            db.execute("DELETE FROM models WHERE id = ?", (model_id,))
-            # удаляем продукт
-            db.execute("DELETE FROM products WHERE id = ?", (product_id,))
-            return jsonify(success=True)
+        product_id = row['product_id']
         
+        # Удаляем из корзины с проверкой
+        if db.remove_from_cart(product_id, session['user']['id']):
+            flash('Товар удалён из корзины', 'success')
+        else:
+            flash('Товар не найден', 'error')
+        
+        return jsonify(success=True)
+    
     except Exception as e:
         return jsonify(success=False, error=f'Ошибка: {str(e)}'), 400
     
@@ -1772,3 +1775,4 @@ if __name__ == '__main__':
     start_cleanup_loop(db)
 
     app.run(host='0.0.0.0', debug=True)
+
