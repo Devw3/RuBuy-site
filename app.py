@@ -735,20 +735,19 @@ def remove_cart_item():
     model_id = data.get('model_id')
     
     if not model_id:
-        return jsonify(success=False, error="Не указан model_id"), 400
+        return jsonify(success=False, error="Нет model_id"), 400
 
     try:
-        # Удаляем напрямую по model_id и текущему пользователю
-        deleted = db.remove_from_cart(int(model_id), session['user']['id'])
-        
-        if deleted:
-            return jsonify(success=True)
-        else:
-            return jsonify(success=False, error="Товар не найден в корзине"), 404
-            
-    except Exception as e:
-        app.logger.error(f"Remove cart item error: {e}")
-        return jsonify(success=False, error="Ошибка сервера"), 500
+        model_id = int(model_id)
+    except:
+        return jsonify(success=False, error="Неверный ID"), 400
+
+    deleted = db.remove_from_cart(model_id, session['user']['id'])
+    
+    if deleted:
+        return jsonify(success=True)
+    else:
+        return jsonify(success=False, error="Товар не найден в корзине"), 404
         
 @app.route('/checkout/init', methods=['POST'])
 @login_required
@@ -1769,6 +1768,7 @@ if __name__ == '__main__':
     start_cleanup_loop(db)
 
     app.run(host='0.0.0.0', debug=True)
+
 
 
 
