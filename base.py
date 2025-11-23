@@ -1112,57 +1112,63 @@ class Database:
             return [dict(zip(cols, row)) for row in rows]
         
     def add_shipment(self,
-                    user_id: int,
-                    model_ids: list,
-                    delivery_method: str,
-                    packaging: list,
-                    recipient_name: str,
-                    recipient_phone: str,
-                    recipient_city: str,
-                    recipient_address: str,
-                    total_weight: float,
-                    delivery_cost: float,
-                    packaging_cost: float = 0.0,
-                    total_cost: float | None = None,
-                    our_tracking_number: str | None = None
-                    ) -> int:
-        model_ids_str = ','.join(map(str, model_ids)) if model_ids is not None else ''
-        packaging_str = ','.join(map(str, packaging)) if packaging else ''
+                     user_id: int,
+                     model_ids: str,
+                     delivery_method: str,
+                     packaging_options: list,
+                     recipient_name: str,
+                     recipient_phone: str,
+                     recipient_city: str,
+                     recipient_address: str,
+                     total_weight: float,
+                     delivery_cost: float,
+                     packaging_cost: float = 0.0,
+                     total_cost: float | None = None,
+                     our_tracking_number: str | None = None,
+                     status: str = 'pending'
+                     ) -> int:
+        model_ids_str = model_ids if model_ids is not None else ''
+        packaging_str = ','.join(map(str, packaging_options)) if packaging_options else ''
 
-        with self.get_cursor() as cursor:
-            # Убедимся, что колонка our_tracking_number существует (безопасно)
-            cursor.execute("PRAGMA table_info(order_shipments)")
-            cols = [row['name'] if isinstance(row, dict) and 'name' in row else row[1] for row in cursor.fetchall()]
-            if 'our_tracking_number' not in cols:
-                try:
-                    cursor.execute("ALTER TABLE order_shipments ADD COLUMN our_tracking_number TEXT")
-                except sqlite3.OperationalError:
-                    # игнорируем — миграцию нужно сделать отдельно
-                    pass
+        try:
+            with self.get_cursor() as cursor:
+                # Убедимся, что колонка our_tracking_number существует (безопасно)
+                cursor.execute("PRAGMA table_info(order_shipments)")
+                cols = [row['name'] if isinstance(row, dict) and 'name' in row else row[1] for row in cursor.fetchall()]
+                if 'our_tracking_number' not in cols:
+                    try:
+                        cursor.execute("ALTER TABLE order_shipments ADD COLUMN our_tracking_number TEXT")
+                    except sqlite3.OperationalError:
+                        # игнорируем — миграцию нужно сделать отдельно
+                        pass
 
-            # Вставка: перечисляем колонки без лишней запятой
-            cursor.execute('''
-                INSERT INTO order_shipments (
-                    user_id, model_ids, delivery_method, packaging_options,
-                    recipient_name, recipient_phone, recipient_city, recipient_address,
-                    total_weight, delivery_cost, packaging_cost, total_cost, our_tracking_number
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                user_id,
-                model_ids_str,
-                delivery_method,
-                packaging_str,
-                recipient_name,
-                recipient_phone,
-                recipient_city,
-                recipient_address,
-                total_weight,
-                delivery_cost,
-                packaging_cost,
-                total_cost,
-                our_tracking_number
-            ))
-
+                # Вставка: перечисляем колонки без лишней запятой
+                cursor.execute('''
+                    INSERT INTO order_shipments (
+                        user_id, model_ids, delivery_method, packaging_options,
+                        recipient_name, recipient_phone, recipient_city, recipient_address,
+                        total_weight, delivery_cost, packaging_cost, total_cost, our_tracking_number, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    user_id,
+                    model_ids_str,
+                    delivery_method,
+                    packaging_str,
+                    recipient_name,
+                    recipient_phone,
+                    recipient_city,
+                    recipient_address,
+                    total_weight,
+                    delivery_cost,
+                    packaging_cost,
+                    total_cost,
+                    our_tracking_number,
+                    status
+                ))
+                return cursor.lastrowid
+        except Exception as e:
+            current_app.logger.exception(f"Failed to add shipment: {e}")
+            raise
     
     def get_shipments_with_photos(self, user_id):
         import json, sqlite3, re
