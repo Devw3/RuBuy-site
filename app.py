@@ -38,9 +38,9 @@ app.config.update({
 })
 
 DELIVERY_RATES = {
-    'air_fast': 35,
-    'air_slow': 8,
-    'auto_fast': 7
+    'air_fast': 40.0,
+    'air_slow': 9.2,
+    'auto_fast': 8.2
 }
 
 SHIPMENT_STATUSES = {
@@ -1766,6 +1766,7 @@ if __name__ == '__main__':
     start_cleanup_loop(db)
 
     app.run(host='0.0.0.0', debug=True)
+
 
 
 
