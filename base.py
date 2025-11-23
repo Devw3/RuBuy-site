@@ -1731,22 +1731,14 @@ class Database:
         return shipments
 
 
-    def remove_from_cart(self, cart_item_id: int, user_id: int = None) -> bool:
-        """Удаляет товар из корзины по ID. Если user_id указан — проверяет владение."""
-        try:
-            with self.get_cursor() as cursor:
-                if user_id is not None:
-                    # С проверкой на пользователя (для безопасности)
-                    cursor.execute("""
-                        DELETE FROM cart_items 
-                        WHERE id = ? AND user_id = ?
-                    """, (cart_item_id, user_id))
-                else:
-                    cursor.execute("DELETE FROM cart_items WHERE id = ?", (cart_item_id,))
-                return cursor.rowcount > 0  # Возвращает True, если удалено
-        except Exception as e:
-            current_app.logger.exception(f"Failed to remove from cart: {e}")
-            raise
+    def remove_from_cart(self, model_id: int, user_id: int) -> bool:
+        """Удаляет товар из корзины по model_id и user_id"""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                DELETE FROM cart_items 
+                WHERE model_id = ? AND user_id = ?
+            """, (model_id, user_id))
+            return cursor.rowcount > 0
 
     def execute(self, query, params=()):
         """Выполняет SQL-запрос и возвращает cursor для fetch."""
@@ -1768,3 +1760,4 @@ class Database:
         with self.get_cursor() as cursor:
             cursor.execute(query, params)
             return cursor.rowcount > 0
+
