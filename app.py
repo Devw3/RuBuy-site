@@ -735,7 +735,7 @@ def remove_cart_item():
         return jsonify(success=False, error="Не указан model_id"), 400
     
     try:
-        # Получаем product_id без raw cursor
+        # Замени на query_one, чтобы избежать closed cursor
         row = db.query_one(
             "SELECT product_id FROM models WHERE id = ?",
             (model_id,)
@@ -744,18 +744,19 @@ def remove_cart_item():
             return jsonify(success=False, error="Модель не найдена"), 404
 
         product_id = row['product_id']
-        
-        # Удаляем из корзины с проверкой
-        if db.remove_from_cart(product_id, session['user']['id']):
+        # удаляем модель
+        deleted = db.remove_from_cart(product_id, session['user']['id'])
+        if deleted:
             flash('Товар удалён из корзины', 'success')
+            return jsonify(success=True, deleted=True)  # Добавь deleted для фронтенда
         else:
             flash('Товар не найден', 'error')
-        
-        return jsonify(success=True)
-    
+            return jsonify(success=False, error="Товар не найден в корзине"), 404
+            
     except Exception as e:
-        return jsonify(success=False, error=f'Ошибка: {str(e)}'), 400
-    
+        app.logger.exception(f"Error in remove_cart_item: {e}")
+        return jsonify(success=False, error=f'Ошибка: {str(e)}'), 500
+        
 @app.route('/checkout/init', methods=['POST'])
 @login_required
 def checkout_init():
@@ -1775,4 +1776,5 @@ if __name__ == '__main__':
     start_cleanup_loop(db)
 
     app.run(host='0.0.0.0', debug=True)
+
 
