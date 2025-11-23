@@ -1770,4 +1770,5 @@ if __name__ == '__main__':
             db.create_admin(ADMIN_USERNAME, ADMIN_PASSWORD)
             
     start_cleanup_loop(db)
+
     app.run(host='0.0.0.0', debug=True)
