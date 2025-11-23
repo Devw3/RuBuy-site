@@ -735,20 +735,10 @@ def remove_cart_item():
         return jsonify(success=False, error="Не указан model_id"), 400
     
     try:
-        # Замени на query_one, чтобы избежать closed cursor
-        row = db.query_one(
-            "SELECT product_id FROM models WHERE id = ?",
-            (model_id,)
-        )
-        if row is None:
-            return jsonify(success=False, error="Модель не найдена"), 404
-
-        product_id = row['product_id']
-        # удаляем модель
-        deleted = db.remove_from_cart(product_id, session['user']['id'])
+        deleted = db.remove_from_cart(model_id, session['user']['id'])
         if deleted:
             flash('Товар удалён из корзины', 'success')
-            return jsonify(success=True, deleted=True)  # Добавь deleted для фронтенда
+            return jsonify(success=True, deleted=True)
         else:
             flash('Товар не найден', 'error')
             return jsonify(success=False, error="Товар не найден в корзине"), 404
@@ -1776,5 +1766,6 @@ if __name__ == '__main__':
     start_cleanup_loop(db)
 
     app.run(host='0.0.0.0', debug=True)
+
 
 
