@@ -1729,3 +1729,21 @@ class Database:
             })
 
         return shipments
+
+
+    def remove_from_cart(self, cart_item_id: int, user_id: int = None) -> bool:
+        """Удаляет товар из корзины по ID. Если user_id указан — проверяет владение."""
+        try:
+            with self.get_cursor() as cursor:
+                if user_id is not None:
+                    # С проверкой на пользователя (для безопасности)
+                    cursor.execute("""
+                        DELETE FROM cart_items 
+                        WHERE id = ? AND user_id = ?
+                    """, (cart_item_id, user_id))
+                else:
+                    cursor.execute("DELETE FROM cart_items WHERE id = ?", (cart_item_id,))
+                return cursor.rowcount > 0  # Возвращает True, если удалено
+        except Exception as e:
+            current_app.logger.exception(f"Failed to remove from cart: {e}")
+            raise
