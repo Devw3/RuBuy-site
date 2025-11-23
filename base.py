@@ -1756,3 +1756,15 @@ class Database:
             else:
                 return cursor.execute(query)
 
+    def query_one(self, query, params=()):
+        """Выполняет SELECT и возвращает одну строку (dict или None)."""
+        with self.get_cursor() as cursor:
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def delete(self, query, params=()):
+        """Выполняет DELETE и возвращает True, если что-то удалено."""
+        with self.get_cursor() as cursor:
+            cursor.execute(query, params)
+            return cursor.rowcount > 0
