@@ -729,23 +729,26 @@ def basket():
         return render_template('basket.html', cart=[], total=0)
 
 @app.route('/remove-cart-item', methods=['POST'])
+@login_required
 def remove_cart_item():
-    model_id = (request.get_json() or {}).get('model_id')
+    data = request.get_json() or {}
+    model_id = data.get('model_id')
+    
     if not model_id:
         return jsonify(success=False, error="Не указан model_id"), 400
-    
+
     try:
-        deleted = db.remove_from_cart(model_id, session['user']['id'])
+        # Удаляем напрямую по model_id и текущему пользователю
+        deleted = db.remove_from_cart(int(model_id), session['user']['id'])
+        
         if deleted:
-            flash('Товар удалён из корзины', 'success')
-            return jsonify(success=True, deleted=True)
+            return jsonify(success=True)
         else:
-            flash('Товар не найден', 'error')
             return jsonify(success=False, error="Товар не найден в корзине"), 404
             
     except Exception as e:
-        app.logger.exception(f"Error in remove_cart_item: {e}")
-        return jsonify(success=False, error=f'Ошибка: {str(e)}'), 500
+        app.logger.error(f"Remove cart item error: {e}")
+        return jsonify(success=False, error="Ошибка сервера"), 500
         
 @app.route('/checkout/init', methods=['POST'])
 @login_required
@@ -1766,6 +1769,7 @@ if __name__ == '__main__':
     start_cleanup_loop(db)
 
     app.run(host='0.0.0.0', debug=True)
+
 
 
 
