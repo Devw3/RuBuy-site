@@ -468,8 +468,8 @@
       .then(data => {
         hideLoader();
         if (data.success) {
-          $(`.cart-item[data-model-id="${modelId}"]`).remove();
-          recalcCartTotal();
+            $(`.cart-item[data-model-id="${modelId}"]`).remove();          
+            recalcCartTotal();
         } else showError(data.error || 'Не удалось удалить товар');
       })
       .catch(() => {
@@ -517,3 +517,4 @@
 </body>
 
 </html>
+
