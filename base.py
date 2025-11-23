@@ -1747,3 +1747,12 @@ class Database:
         except Exception as e:
             current_app.logger.exception(f"Failed to remove from cart: {e}")
             raise
+
+    def execute(self, query, params=()):
+        """Выполняет SQL-запрос и возвращает cursor для fetch."""
+        with self.get_cursor() as cursor:
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
